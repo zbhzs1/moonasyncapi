@@ -15,7 +15,7 @@ version = "0.1.0"
 
 readme = "README.mbt.md"
 
-repository = "https://github.com/moonasyncapi/moonasyncapi"
+repository = ""
 
 license = "Apache-2.0"
 
