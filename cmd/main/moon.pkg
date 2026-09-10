@@ -1,0 +1,5 @@
+import {
+  "moonasyncapi/moonasyncapi" @lib,
+}
+
+pkgtype(kind: "executable")
