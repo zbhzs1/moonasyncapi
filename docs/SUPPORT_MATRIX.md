@@ -7,6 +7,7 @@ MoonAsyncAPI intentionally implements a documented, testable subset of AsyncAPI
 | --- | --- | --- |
 | Document format | AsyncAPI 3.0 JSON | YAML and other AsyncAPI versions are not parsed |
 | Document metadata | `asyncapi`, `info.title` | Additional metadata is currently ignored |
+| Servers | host, protocol, protocol version, pathname, description | Security schemes and server variables are not yet interpreted |
 | Channels | channel names, `address`, address-template parameters, parameter enum/default validation | Local channel references are accepted in operations |
 | Messages | channel messages and local `#/components/messages/...` references, title, content type, payload | External message references are not supported |
 | Operations | `send` and `receive`, channel and message names | Operation component references are not yet resolved |

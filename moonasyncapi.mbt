@@ -12,6 +12,17 @@ pub struct AsyncApiDocument {
   operations : Array[AsyncApiOperation]
   schemas : Map[String, Schema]
   messages : Map[String, AsyncApiMessage]
+  servers : Map[String, AsyncApiServer]
+} derive(Eq, Debug)
+
+///|
+pub struct AsyncApiServer {
+  name : String
+  host : String
+  protocol : String
+  protocol_version : String?
+  pathname : String?
+  description : String?
 } derive(Eq, Debug)
 
 ///|
@@ -204,6 +215,15 @@ pub fn find_operation(
 }
 
 ///|
+/// Find a server declaration by name.
+pub fn find_server(
+  document : AsyncApiDocument,
+  name : String,
+) -> AsyncApiServer? {
+  document.servers.get(name)
+}
+
+///|
 /// Return a compact inventory of the parsed contract.
 pub fn document_summary(document : AsyncApiDocument) -> String {
   "AsyncAPI " +
@@ -216,7 +236,9 @@ pub fn document_summary(document : AsyncApiDocument) -> String {
   document.messages.length().to_string() +
   " messages, " +
   document.schemas.length().to_string() +
-  " schemas"
+  " schemas, " +
+  document.servers.length().to_string() +
+  " servers"
 }
 
 ///|
@@ -347,6 +369,9 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
     for message_name, message in channel.messages {
       validate_message(message, path + ".messages." + message_name, issues)
     }
+  }
+  for name, server in document.servers {
+    validate_server(server, "$.servers." + name, issues)
   }
   for name, schema in document.schemas {
     validate_schema_definition(schema, "$.components.schemas." + name, issues)
@@ -513,6 +538,7 @@ pub fn diff(
       }
     }
   }
+  compare_servers(before.servers, after.servers, issues)
   for name, _ in after.channels {
     if before.channels.get(name) is None {
       issues.push(
@@ -702,6 +728,153 @@ fn compare_channel_parameters(
           path + ".parameters." + name,
           "channel parameter was added",
         ),
+      )
+    }
+  }
+}
+
+///|
+fn validate_server(
+  server : AsyncApiServer,
+  path : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  if server.host.length() == 0 {
+    issues.push(
+      error(
+        "server.host.missing",
+        path + ".host",
+        "server host must not be empty",
+      ),
+    )
+  } else if server.host.contains("://") {
+    issues.push(
+      warning(
+        "server.host.scheme",
+        path + ".host",
+        "server host should not include a URI scheme",
+      ),
+    )
+  }
+  if server.protocol.length() == 0 {
+    issues.push(
+      error(
+        "server.protocol.missing",
+        path + ".protocol",
+        "server protocol must not be empty",
+      ),
+    )
+  } else if !is_recognized_server_protocol(server.protocol) {
+    issues.push(
+      warning(
+        "server.protocol.unknown",
+        path + ".protocol",
+        "server protocol is outside the recognized set: " + server.protocol,
+      ),
+    )
+  }
+  match server.pathname {
+    Some(pathname) =>
+      if pathname.length() > 0 && !pathname.has_prefix("/") {
+        issues.push(
+          warning(
+            "server.pathname.invalid",
+            path + ".pathname",
+            "server pathname should start with a slash",
+          ),
+        )
+      }
+    None => ()
+  }
+  match server.protocol_version {
+    Some(version) =>
+      if version.length() == 0 {
+        issues.push(
+          warning(
+            "server.protocol_version.empty",
+            path + ".protocolVersion",
+            "protocolVersion must not be empty when supplied",
+          ),
+        )
+      }
+    None => ()
+  }
+}
+
+///|
+fn is_recognized_server_protocol(protocol : String) -> Bool {
+  protocol == "mqtt" ||
+  protocol == "mqtts" ||
+  protocol == "kafka" ||
+  protocol == "kafka-secure" ||
+  protocol == "amqp" ||
+  protocol == "amqps" ||
+  protocol == "ws" ||
+  protocol == "wss" ||
+  protocol == "http" ||
+  protocol == "https"
+}
+
+///|
+fn compare_servers(
+  before : Map[String, AsyncApiServer],
+  after : Map[String, AsyncApiServer],
+  issues : Array[Diagnostic],
+) -> Unit {
+  for name, old_server in before {
+    match after.get(name) {
+      None =>
+        issues.push(
+          error(
+            "compat.server.removed",
+            "$.servers." + name,
+            "server was removed",
+          ),
+        )
+      Some(new_server) => {
+        if old_server.host != new_server.host {
+          issues.push(
+            error(
+              "compat.server.host.changed",
+              "$.servers." + name + ".host",
+              "server host changed",
+            ),
+          )
+        }
+        if old_server.protocol != new_server.protocol {
+          issues.push(
+            error(
+              "compat.server.protocol.changed",
+              "$.servers." + name + ".protocol",
+              "server protocol changed",
+            ),
+          )
+        }
+        if old_server.pathname != new_server.pathname {
+          issues.push(
+            warning(
+              "compat.server.pathname.changed",
+              "$.servers." + name + ".pathname",
+              "server pathname changed",
+            ),
+          )
+        }
+        if old_server.protocol_version != new_server.protocol_version {
+          issues.push(
+            warning(
+              "compat.server.protocol_version.changed",
+              "$.servers." + name + ".protocolVersion",
+              "server protocol version changed",
+            ),
+          )
+        }
+      }
+    }
+  }
+  for name, _ in after {
+    if before.get(name) is None {
+      issues.push(
+        info("compat.server.added", "$.servers." + name, "server was added"),
       )
     }
   }
@@ -925,6 +1098,11 @@ fn parse_document(value : Json) -> Result[AsyncApiDocument, String] {
     Some(_) => return Err("$.operations must be an object".to_string())
     None => []
   }
+  let servers = match root.get("servers") {
+    Some(Object(value)) => parse_servers(value)
+    Some(_) => return Err("$.servers must be an object".to_string())
+    None => Map([])
+  }
   Ok({
     asyncapi,
     version: asyncapi,
@@ -933,7 +1111,48 @@ fn parse_document(value : Json) -> Result[AsyncApiDocument, String] {
     operations,
     schemas,
     messages,
+    servers,
   })
+}
+
+///|
+fn parse_servers(raw : Map[String, Json]) -> Map[String, AsyncApiServer] {
+  let result : Map[String, AsyncApiServer] = Map([])
+  for name, value in raw {
+    match value {
+      Object(server) => {
+        let host = match server.get("host") {
+          Some(String(value)) => value
+          _ => ""
+        }
+        let protocol = match server.get("protocol") {
+          Some(String(value)) => value
+          _ => ""
+        }
+        let protocol_version = optional_string_field(server, "protocolVersion")
+        let pathname = optional_string_field(server, "pathname")
+        let description = optional_string_field(server, "description")
+        result[name] = {
+          name,
+          host,
+          protocol,
+          protocol_version,
+          pathname,
+          description,
+        }
+      }
+      _ =>
+        result[name] = {
+          name,
+          host: "",
+          protocol: "",
+          protocol_version: None,
+          pathname: None,
+          description: None,
+        }
+    }
+  }
+  result
 }
 
 ///|

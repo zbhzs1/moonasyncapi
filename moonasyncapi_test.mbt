@@ -62,7 +62,7 @@ test "exposes parsed contract lookup APIs" {
   inspect(find_operation(document, "receive") is Some(_), content="true")
   inspect(
     document_summary(document),
-    content="AsyncAPI 3.0.0: 1 channels, 1 operations, 1 messages, 1 schemas",
+    content="AsyncAPI 3.0.0: 1 channels, 1 operations, 1 messages, 1 schemas, 0 servers",
   )
 }
 
@@ -307,6 +307,46 @@ test "reports reusable component message additions and removals" {
   inspect(issues.length(), content="2")
   inspect(issues[0].code, content="compat.component_message.removed")
   inspect(issues[1].code, content="compat.component_message.added")
+}
+
+///|
+test "parses and validates AsyncAPI servers" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Servers\"},\"servers\":{\"production\":{\"host\":\"broker.example.com:8883\",\"protocol\":\"mqtts\",\"protocolVersion\":\"5.0\",\"pathname\":\"/mqtt\",\"description\":\"Production broker\"}},\"channels\":{}}",
+  ).unwrap()
+  let server = find_server(document, "production").unwrap()
+  inspect(server.host, content="broker.example.com:8883")
+  inspect(server.protocol, content="mqtts")
+  inspect(validate(document).length(), content="1")
+  inspect(validate(document)[0].code, content="channels.empty")
+}
+
+///|
+test "diagnoses malformed AsyncAPI servers" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Servers\"},\"servers\":{\"missing\":{},\"custom\":{\"host\":\"https://example.com\",\"protocol\":\"custom\",\"protocolVersion\":\"\",\"pathname\":\"events\"}},\"channels\":{}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="7")
+  inspect(diagnostics_by_severity(issues, "error").length(), content="2")
+  inspect(diagnostics_by_severity(issues, "warning").length(), content="5")
+}
+
+///|
+test "reports server compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"servers\":{\"production\":{\"host\":\"old.example.com\",\"protocol\":\"mqtt\",\"pathname\":\"/mqtt\"},\"legacy\":{\"host\":\"legacy.example.com\",\"protocol\":\"mqtt\"}},\"channels\":{}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"servers\":{\"production\":{\"host\":\"new.example.com\",\"protocol\":\"mqtts\",\"pathname\":\"/events\"},\"staging\":{\"host\":\"staging.example.com\",\"protocol\":\"mqtt\"}},\"channels\":{}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="5")
+  inspect(issues[0].code, content="compat.server.host.changed")
+  inspect(issues[1].code, content="compat.server.protocol.changed")
+  inspect(issues[2].code, content="compat.server.pathname.changed")
+  inspect(issues[3].code, content="compat.server.removed")
+  inspect(issues[4].code, content="compat.server.added")
 }
 
 ///|

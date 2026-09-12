@@ -32,6 +32,8 @@ pub fn find_operation(AsyncApiDocument, String) -> AsyncApiOperation?
 
 pub fn find_schema(AsyncApiDocument, String) -> Schema?
 
+pub fn find_server(AsyncApiDocument, String) -> AsyncApiServer?
+
 pub fn highest_severity(Array[Diagnostic]) -> String
 
 pub fn parse(String) -> Result[AsyncApiDocument, String]
@@ -64,6 +66,7 @@ pub struct AsyncApiDocument {
   operations : Array[AsyncApiOperation]
   schemas : Map[String, Schema]
   messages : Map[String, AsyncApiMessage]
+  servers : Map[String, AsyncApiServer]
 } derive(Eq, @debug.Debug)
 
 pub struct AsyncApiMessage {
@@ -79,6 +82,15 @@ pub struct AsyncApiOperation {
   channel : String
   messages : Array[String]
   protocol : String?
+} derive(Eq, @debug.Debug)
+
+pub struct AsyncApiServer {
+  name : String
+  host : String
+  protocol : String
+  protocol_version : String?
+  pathname : String?
+  description : String?
 } derive(Eq, @debug.Debug)
 
 pub struct ChannelParameter {
