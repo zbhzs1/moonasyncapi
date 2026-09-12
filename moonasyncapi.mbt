@@ -50,6 +50,11 @@ pub struct Schema {
   maximum : Double?
   min_length : Double?
   max_length : Double?
+  min_items : Double?
+  max_items : Double?
+  unique_items : Bool
+  min_properties : Double?
+  max_properties : Double?
   unsupported_keywords : Array[String]
 } derive(Eq, Debug)
 
@@ -789,6 +794,11 @@ fn parse_schema(value : Json) -> Schema {
       let maximum = number_field(object, "maximum")
       let min_length = number_field(object, "minLength")
       let max_length = number_field(object, "maxLength")
+      let min_items = number_field(object, "minItems")
+      let max_items = number_field(object, "maxItems")
+      let unique_items = bool_field(object, "uniqueItems", false)
+      let min_properties = number_field(object, "minProperties")
+      let max_properties = number_field(object, "maxProperties")
       let unsupported_keywords : Array[String] = []
       for key, _ in object {
         if is_unsupported_schema_keyword(key) {
@@ -806,6 +816,11 @@ fn parse_schema(value : Json) -> Schema {
         maximum,
         min_length,
         max_length,
+        min_items,
+        max_items,
+        unique_items,
+        min_properties,
+        max_properties,
         unsupported_keywords,
       }
     }
@@ -821,6 +836,11 @@ fn parse_schema(value : Json) -> Schema {
         maximum: None,
         min_length: None,
         max_length: None,
+        min_items: None,
+        max_items: None,
+        unique_items: false,
+        min_properties: None,
+        max_properties: None,
         unsupported_keywords: [],
       }
   }
@@ -975,6 +995,20 @@ fn validate_schema_definition(
     }
     None => ()
   }
+  validate_nonnegative_bounds(
+    schema.min_items,
+    schema.max_items,
+    path,
+    "items",
+    issues,
+  )
+  validate_nonnegative_bounds(
+    schema.min_properties,
+    schema.max_properties,
+    path,
+    "properties",
+    issues,
+  )
   for keyword in schema.unsupported_keywords {
     issues.push(
       warning(
@@ -1062,9 +1096,56 @@ fn is_unsupported_schema_keyword(keyword : String) -> Bool {
   keyword == "not" ||
   keyword == "pattern" ||
   keyword == "format" ||
-  keyword == "minItems" ||
-  keyword == "maxItems" ||
   keyword == "additionalProperties"
+}
+
+///|
+fn validate_nonnegative_bounds(
+  minimum : Double?,
+  maximum : Double?,
+  path : String,
+  subject : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  match minimum {
+    Some(value) =>
+      if value < 0 {
+        issues.push(
+          error(
+            "schema." + subject + ".negative",
+            path,
+            "schema " + subject + " minimum must not be negative",
+          ),
+        )
+      }
+    None => ()
+  }
+  match maximum {
+    Some(value) =>
+      if value < 0 {
+        issues.push(
+          error(
+            "schema." + subject + ".negative",
+            path,
+            "schema " + subject + " maximum must not be negative",
+          ),
+        )
+      }
+    None => ()
+  }
+  match (minimum, maximum) {
+    (Some(low), Some(high)) =>
+      if low > high {
+        issues.push(
+          error(
+            "schema." + subject + ".invalid",
+            path,
+            "schema " + subject + " minimum must not exceed maximum",
+          ),
+        )
+      }
+    _ => ()
+  }
 }
 
 ///|
@@ -1119,7 +1200,12 @@ fn validate_json_schema(
   match schema.kind {
     Some(kind) => {
       let actual = json_kind(value)
-      if kind != actual && !(kind == "integer" && actual == "number") {
+      let matches = if kind == "integer" {
+        json_is_integer(value)
+      } else {
+        kind == actual
+      }
+      if !matches {
         issues.push(
           error(
             "payload.type.mismatch", path, "payload type does not match schema type",
@@ -1131,6 +1217,28 @@ fn validate_json_schema(
   }
   match value {
     Object(object) => {
+      match schema.min_properties {
+        Some(limit) =>
+          if object.length().to_double() < limit {
+            issues.push(
+              error(
+                "payload.object.min_properties", path, "object has fewer properties than minProperties",
+              ),
+            )
+          }
+        None => ()
+      }
+      match schema.max_properties {
+        Some(limit) =>
+          if object.length().to_double() > limit {
+            issues.push(
+              error(
+                "payload.object.max_properties", path, "object has more properties than maxProperties",
+              ),
+            )
+          }
+        None => ()
+      }
       for name in schema.required {
         if object.get(name) is None {
           issues.push(
@@ -1180,7 +1288,36 @@ fn validate_json_schema(
         )
       }
     }
-    Array(values) =>
+    Array(values) => {
+      match schema.min_items {
+        Some(limit) =>
+          if values.length().to_double() < limit {
+            issues.push(
+              error(
+                "payload.array.min_items", path, "array has fewer items than minItems",
+              ),
+            )
+          }
+        None => ()
+      }
+      match schema.max_items {
+        Some(limit) =>
+          if values.length().to_double() > limit {
+            issues.push(
+              error(
+                "payload.array.max_items", path, "array has more items than maxItems",
+              ),
+            )
+          }
+        None => ()
+      }
+      if schema.unique_items && json_array_has_duplicates(values) {
+        issues.push(
+          error(
+            "payload.array.unique_items", path, "array items must be unique",
+          ),
+        )
+      }
       match schema.items {
         Some(item_schema) =>
           for index, item in values {
@@ -1193,6 +1330,7 @@ fn validate_json_schema(
           }
         None => ()
       }
+    }
     _ => ()
   }
   match value {
@@ -1233,6 +1371,37 @@ fn json_kind(value : Json) -> String {
     Array(_) => "array"
     Object(_) => "object"
   }
+}
+
+///|
+fn json_is_integer(value : Json) -> Bool {
+  match value {
+    Number(number, repr~) =>
+      match repr {
+        Some(text) =>
+          if text.contains(".") {
+            number == number.floor()
+          } else {
+            true
+          }
+        None => number == number.floor()
+      }
+    _ => false
+  }
+}
+
+///|
+fn json_array_has_duplicates(values : Array[Json]) -> Bool {
+  for index, value in values {
+    let mut other = index + 1
+    while other < values.length() {
+      if value == values[other] {
+        return true
+      }
+      other += 1
+    }
+  }
+  false
 }
 
 ///|
@@ -1421,6 +1590,19 @@ fn number_field(object : Map[String, Json], name : String) -> Double? {
   match object.get(name) {
     Some(Number(value, ..)) => Some(value)
     _ => None
+  }
+}
+
+///|
+fn bool_field(
+  object : Map[String, Json],
+  name : String,
+  fallback : Bool,
+) -> Bool {
+  match object.get(name) {
+    Some(True) => true
+    Some(False) => false
+    _ => fallback
   }
 }
 

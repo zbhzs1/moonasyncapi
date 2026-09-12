@@ -102,6 +102,57 @@ test "rejects negative string length constraints" {
 }
 
 ///|
+test "validates array size and uniqueness constraints" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Batches\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"batch\":{\"payload\":{\"type\":\"array\",\"minItems\":2,\"maxItems\":3,\"uniqueItems\":true,\"items\":{\"type\":\"integer\"}}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("batch")
+    .unwrap()
+  inspect(validate_payload(message, @json.parse("[1]")).length(), content="1")
+  inspect(validate_payload(message, @json.parse("[1,1]")).length(), content="1")
+  inspect(
+    validate_payload(message, @json.parse("[1,2,3,4]")).length(),
+    content="1",
+  )
+  inspect(
+    validate_payload(message, @json.parse("[1,2,3]")).length(),
+    content="0",
+  )
+}
+
+///|
+test "validates object property count constraints" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Objects\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"minProperties\":1,\"maxProperties\":2}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  inspect(validate_payload(message, @json.parse("{}")).length(), content="1")
+  inspect(
+    validate_payload(message, @json.parse("{\"a\":1}")).length(),
+    content="0",
+  )
+  inspect(
+    validate_payload(message, @json.parse("{\"a\":1,\"b\":2,\"c\":3}")).length(),
+    content="1",
+  )
+}
+
+///|
+test "integer schemas reject fractional numbers" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Integers\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"integer\"}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  inspect(validate_payload(message, @json.parse("42")).length(), content="0")
+  inspect(validate_payload(message, @json.parse("1.5")).length(), content="1")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",
