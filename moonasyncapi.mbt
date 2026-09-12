@@ -592,7 +592,7 @@ fn parse_schema(value : Json) -> Schema {
 
 ///|
 fn resolve_schema(schema : Schema, schemas : Map[String, Schema]) -> Schema {
-  match schema.ref_name {
+  let resolved = match schema.ref_name {
     Some(reference) => {
       let prefix = "#/components/schemas/"
       if reference.has_prefix(prefix) {
@@ -607,6 +607,15 @@ fn resolve_schema(schema : Schema, schemas : Map[String, Schema]) -> Schema {
     }
     None => schema
   }
+  let properties : Map[String, Schema] = Map([])
+  for name, property in resolved.properties {
+    properties[name] = resolve_schema(property, schemas)
+  }
+  let items = match resolved.items {
+    Some(item) => Some(resolve_schema(item, schemas))
+    None => None
+  }
+  { ..resolved, properties, items }
 }
 
 ///|

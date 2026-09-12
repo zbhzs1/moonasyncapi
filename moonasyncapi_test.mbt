@@ -126,6 +126,19 @@ test "reports an array item type mismatch" {
 }
 
 ///|
+test "resolves nested schema references in object properties" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Nested\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"user\":{\"$ref\":\"#/components/schemas/User\"}}}}}}},\"components\":{\"schemas\":{\"User\":{\"type\":\"object\",\"required\":[\"id\"],\"properties\":{\"id\":{\"type\":\"string\"}}}}}}",
+  ).unwrap()
+  let message = document.channels.get("events").unwrap().messages
+    .get("event")
+    .unwrap()
+  let issues = validate_payload(message, @json.parse("{\"user\":{}}"))
+  inspect(issues.length(), content="1")
+  inspect(issues[0].path, content="$.payload.user.id")
+}
+
+///|
 test "accepts an operation that references a component message" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Orders\"},\"channels\":{\"orders\":{\"address\":\"orders\"}},\"operations\":{\"receiveOrders\":{\"action\":\"receive\",\"channel\":{\"$ref\":\"#/channels/orders\"},\"messages\":[{\"$ref\":\"#/components/messages/OrderCreated\"}]}},\"components\":{\"messages\":{\"OrderCreated\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"]}}}}}",
