@@ -249,6 +249,38 @@ test "reports channel parameter compatibility changes" {
 }
 
 ///|
+test "renders channel addresses with explicit and default parameters" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Devices\"},\"channels\":{\"events\":{\"address\":\"devices/{region}/{id}/events\",\"parameters\":{\"region\":{\"enum\":[\"eu\",\"us\"],\"default\":\"eu\"},\"id\":{}}}}}",
+  ).unwrap()
+  let channel = find_channel(document, "events").unwrap()
+  inspect(
+    render_channel_address(channel, Map([("id", "42")])).unwrap(),
+    content="devices/eu/42/events",
+  )
+  inspect(
+    render_channel_address(channel, Map([("region", "us"), ("id", "7")])).unwrap(),
+    content="devices/us/7/events",
+  )
+}
+
+///|
+test "rejects missing and invalid channel parameter values" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Devices\"},\"channels\":{\"events\":{\"address\":\"devices/{region}/{id}\",\"parameters\":{\"region\":{\"enum\":[\"eu\",\"us\"]},\"id\":{}}}}}",
+  ).unwrap()
+  let channel = find_channel(document, "events").unwrap()
+  inspect(
+    render_channel_address(channel, Map([])).unwrap_err(),
+    content="missing channel parameter value: region",
+  )
+  inspect(
+    render_channel_address(channel, Map([("region", "apac"), ("id", "7")])).unwrap_err(),
+    content="channel parameter value is outside enum: region",
+  )
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",

@@ -36,6 +36,8 @@ pub fn highest_severity(Array[Diagnostic]) -> String
 
 pub fn parse(String) -> Result[AsyncApiDocument, String]
 
+pub fn render_channel_address(AsyncApiChannel, Map[String, String]) -> Result[String, String]
+
 pub fn summarize_diagnostics(Array[Diagnostic]) -> DiagnosticSummary
 
 pub fn validate(AsyncApiDocument) -> Array[Diagnostic]

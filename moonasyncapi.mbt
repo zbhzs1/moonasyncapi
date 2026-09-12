@@ -132,6 +132,54 @@ pub fn address_parameters(address : String) -> Array[String] {
 }
 
 ///|
+/// Render a concrete channel address from declared parameter values.
+/// Declared defaults are used when the caller omits a value.
+pub fn render_channel_address(
+  channel : AsyncApiChannel,
+  values : Map[String, String],
+) -> Result[String, String] {
+  let template_issues = validate_address_template(channel.address, "$.address")
+  if template_issues.length() > 0 {
+    return Err("channel address template is malformed")
+  }
+  let mut output = ""
+  for part_index, part in channel.address.split("{") {
+    if part_index == 0 {
+      output = output + part.to_owned()
+    } else {
+      let mut parameter_name = ""
+      let mut suffix = ""
+      for closed_index, piece in part.split("}") {
+        if closed_index == 0 {
+          parameter_name = piece.to_owned()
+        } else if closed_index == 1 {
+          suffix = piece.to_owned()
+        }
+      }
+      let parameter = match channel.parameters.get(parameter_name) {
+        Some(value) => value
+        None => return Err("undeclared channel parameter: " + parameter_name)
+      }
+      let rendered = match values.get(parameter_name) {
+        Some(value) => value
+        None =>
+          match parameter.default_value {
+            Some(value) => value
+            None =>
+              return Err("missing channel parameter value: " + parameter_name)
+          }
+      }
+      if parameter.enum_values.length() > 0 &&
+        !contains_string(parameter.enum_values, rendered) {
+        return Err("channel parameter value is outside enum: " + parameter_name)
+      }
+      output = output + rendered + suffix
+    }
+  }
+  Ok(output)
+}
+
+///|
 /// Find a reusable component schema by name.
 pub fn find_schema(document : AsyncApiDocument, name : String) -> Schema? {
   document.schemas.get(name)
