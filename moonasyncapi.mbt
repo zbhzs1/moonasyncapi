@@ -343,6 +343,96 @@ pub fn validate_payload(
 }
 
 ///|
+/// Validate a payload against every message selected by an operation.
+pub fn validate_operation_payload(
+  document : AsyncApiDocument,
+  operation_name : String,
+  payload : Json,
+) -> Array[Diagnostic] {
+  let issues : Array[Diagnostic] = []
+  let operation = match find_operation(document.operations, operation_name) {
+    Some(value) => value
+    None => {
+      issues.push(
+        error(
+          "operation.missing",
+          "$.operations." + operation_name,
+          "operation does not exist",
+        ),
+      )
+      return issues
+    }
+  }
+  let channel = match document.channels.get(operation.channel) {
+    Some(value) => value
+    None => {
+      issues.push(
+        error(
+          "operation.channel.missing",
+          "$.operations." + operation_name + ".channel",
+          "operation references an unknown channel",
+        ),
+      )
+      return issues
+    }
+  }
+  if operation.messages.length() == 0 {
+    issues.push(
+      warning(
+        "operation.messages.empty",
+        "$.operations." + operation_name + ".messages",
+        "operation declares no messages",
+      ),
+    )
+  }
+  for message_name in operation.messages {
+    match channel.messages.get(message_name) {
+      Some(message) =>
+        for issue in validate_payload(message, payload) {
+          issues.push(issue)
+        }
+      None =>
+        match document.messages.get(message_name) {
+          Some(message) =>
+            for issue in validate_payload(message, payload) {
+              issues.push(issue)
+            }
+          None =>
+            issues.push(
+              error(
+                "operation.message.missing",
+                "$.operations." + operation_name + ".messages",
+                "operation references an unknown message",
+              ),
+            )
+        }
+    }
+  }
+  issues
+}
+
+///|
+pub fn diagnostics_has_errors(issues : Array[Diagnostic]) -> Bool {
+  for issue in issues {
+    if issue.severity == "error" {
+      return true
+    }
+  }
+  false
+}
+
+///|
+pub fn diagnostics_count(issues : Array[Diagnostic], severity : String) -> Int {
+  let mut count = 0
+  for issue in issues {
+    if issue.severity == severity {
+      count += 1
+    }
+  }
+  count
+}
+
+///|
 fn parse_document(value : Json) -> Result[AsyncApiDocument, String] {
   let root = match value {
     Object(object) => object

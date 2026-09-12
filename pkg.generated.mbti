@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn diagnostics_count(Array[Diagnostic], String) -> Int
+
+pub fn diagnostics_has_errors(Array[Diagnostic]) -> Bool
+
 pub fn diagnostics_to_text(Array[Diagnostic]) -> String
 
 pub fn diff(AsyncApiDocument, AsyncApiDocument) -> Array[Diagnostic]
@@ -13,6 +17,8 @@ pub fn diff(AsyncApiDocument, AsyncApiDocument) -> Array[Diagnostic]
 pub fn parse(String) -> Result[AsyncApiDocument, String]
 
 pub fn validate(AsyncApiDocument) -> Array[Diagnostic]
+
+pub fn validate_operation_payload(AsyncApiDocument, String, Json) -> Array[Diagnostic]
 
 pub fn validate_payload(AsyncApiMessage, Json) -> Array[Diagnostic]
 

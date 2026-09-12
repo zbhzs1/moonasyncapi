@@ -163,6 +163,26 @@ test "diagnoses unresolved nested payload references" {
 }
 
 ///|
+test "validates payloads through an operation" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Operation payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"]}}}}},\"operations\":{\"consume\":{\"action\":\"receive\",\"channel\":{\"$ref\":\"#/channels/events\"},\"messages\":[\"created\"]}}}",
+  ).unwrap()
+  let issues = validate_operation_payload(
+    document,
+    "consume",
+    @json.parse("{}"),
+  )
+  inspect(diagnostics_has_errors(issues), content="true")
+  inspect(diagnostics_count(issues, "error"), content="1")
+  let valid = validate_operation_payload(
+    document,
+    "consume",
+    @json.parse("{\"id\":\"1\"}"),
+  )
+  inspect(diagnostics_has_errors(valid), content="false")
+}
+
+///|
 test "accepts an operation that references a component message" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Orders\"},\"channels\":{\"orders\":{\"address\":\"orders\"}},\"operations\":{\"receiveOrders\":{\"action\":\"receive\",\"channel\":{\"$ref\":\"#/channels/orders\"},\"messages\":[{\"$ref\":\"#/components/messages/OrderCreated\"}]}},\"components\":{\"messages\":{\"OrderCreated\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"]}}}}}",
