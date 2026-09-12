@@ -396,6 +396,30 @@ test "reports enum and const compatibility changes" {
 }
 
 ///|
+test "validates schema defaults and examples" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Examples\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"integer\",\"minimum\":0,\"default\":-1,\"examples\":[0,2,-3]}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="schema.default.invalid")
+  inspect(issues[1].code, content="schema.example.invalid")
+}
+
+///|
+test "reports schema default changes as informational" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{},\"components\":{\"schemas\":{\"Limit\":{\"type\":\"integer\",\"default\":10}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{},\"components\":{\"schemas\":{\"Limit\":{\"type\":\"integer\",\"default\":20}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="compat.schema.default.changed")
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",

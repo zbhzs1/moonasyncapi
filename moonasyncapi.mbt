@@ -67,6 +67,8 @@ pub struct Schema {
   enum_values : Array[String]
   enum_json_values : Array[Json]
   const_value : Json?
+  default_value : Json?
+  examples : Array[Json]
   ref_name : String?
   items : Schema?
   minimum : Double?
@@ -1397,6 +1399,15 @@ fn parse_schema(value : Json) -> Schema {
         _ => ()
       }
       let const_value = object.get("const")
+      let default_value = object.get("default")
+      let examples : Array[Json] = []
+      match object.get("examples") {
+        Some(Array(values)) =>
+          for value in values {
+            examples.push(value)
+          }
+        _ => ()
+      }
       let items = match object.get("items") {
         Some(value) => Some(parse_schema(value))
         None => None
@@ -1425,6 +1436,8 @@ fn parse_schema(value : Json) -> Schema {
         enum_values,
         enum_json_values,
         const_value,
+        default_value,
+        examples,
         ref_name,
         items,
         minimum,
@@ -1449,6 +1462,8 @@ fn parse_schema(value : Json) -> Schema {
         enum_values: [],
         enum_json_values: [],
         const_value: None,
+        default_value: None,
+        examples: [],
         ref_name: None,
         items: None,
         minimum: None,
@@ -1663,6 +1678,40 @@ fn validate_schema_definition(
         keyword,
       ),
     )
+  }
+  match schema.default_value {
+    Some(value) => {
+      let default_issues : Array[Diagnostic] = []
+      validate_json_schema(schema, value, path + ".default", default_issues)
+      if default_issues.length() > 0 {
+        issues.push(
+          warning(
+            "schema.default.invalid",
+            path + ".default",
+            "schema default does not satisfy its constraints",
+          ),
+        )
+      }
+    }
+    None => ()
+  }
+  for index, example in schema.examples {
+    let example_issues : Array[Diagnostic] = []
+    validate_json_schema(
+      schema,
+      example,
+      path + ".examples[" + index.to_string() + "]",
+      example_issues,
+    )
+    if example_issues.length() > 0 {
+      issues.push(
+        warning(
+          "schema.example.invalid",
+          path + ".examples[" + index.to_string() + "]",
+          "schema example does not satisfy its constraints",
+        ),
+      )
+    }
   }
   for name, property in schema.properties {
     if property.ref_name is None {
@@ -2311,6 +2360,15 @@ fn compare_schema_compatibility(
           )
       }
     None => ()
+  }
+  if before.default_value != after.default_value {
+    issues.push(
+      info(
+        "compat.schema.default.changed",
+        path + ".default",
+        "schema default changed",
+      ),
+    )
   }
   for required_name in after.required {
     if !contains_string(before.required, required_name) {

@@ -122,6 +122,8 @@ pub struct Schema {
   enum_values : Array[String]
   enum_json_values : Array[Json]
   const_value : Json?
+  default_value : Json?
+  examples : Array[Json]
   ref_name : String?
   items : Schema?
   minimum : Double?
