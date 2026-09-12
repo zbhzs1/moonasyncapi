@@ -86,6 +86,17 @@ test "validates string length constraints" {
 }
 
 ///|
+test "diagnoses unsupported schema keywords" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Boundaries\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"string\",\"pattern\":\"^[a-z]+$\",\"format\":\"email\"}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="schema.keyword.unsupported")
+  inspect(issues[1].code, content="schema.keyword.unsupported")
+}
+
+///|
 test "reports unsupported bindings and invalid version" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Legacy\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"nats\":{}}}}}",

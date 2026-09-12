@@ -50,6 +50,7 @@ pub struct Schema {
   maximum : Double?
   min_length : Double?
   max_length : Double?
+  unsupported_keywords : Array[String]
 } derive(Eq, Debug)
 
 ///|
@@ -662,6 +663,12 @@ fn parse_schema(value : Json) -> Schema {
       let maximum = number_field(object, "maximum")
       let min_length = number_field(object, "minLength")
       let max_length = number_field(object, "maxLength")
+      let unsupported_keywords : Array[String] = []
+      for key, _ in object {
+        if is_unsupported_schema_keyword(key) {
+          unsupported_keywords.push(key)
+        }
+      }
       {
         kind,
         required,
@@ -673,6 +680,7 @@ fn parse_schema(value : Json) -> Schema {
         maximum,
         min_length,
         max_length,
+        unsupported_keywords,
       }
     }
     _ =>
@@ -687,6 +695,7 @@ fn parse_schema(value : Json) -> Schema {
         maximum: None,
         min_length: None,
         max_length: None,
+        unsupported_keywords: [],
       }
   }
 }
@@ -820,6 +829,16 @@ fn validate_schema_definition(
       }
     None => ()
   }
+  for keyword in schema.unsupported_keywords {
+    issues.push(
+      warning(
+        "schema.keyword.unsupported",
+        path + "." + keyword,
+        "schema keyword is recognized but outside the supported subset: " +
+        keyword,
+      ),
+    )
+  }
   for name, property in schema.properties {
     if property.ref_name is None {
       validate_schema_definition(property, path + ".properties." + name, issues)
@@ -867,6 +886,19 @@ fn is_supported_schema_kind(kind : String) -> Bool {
   kind == "null" ||
   kind == "object" ||
   kind == "array"
+}
+
+///|
+fn is_unsupported_schema_keyword(keyword : String) -> Bool {
+  keyword == "allOf" ||
+  keyword == "anyOf" ||
+  keyword == "oneOf" ||
+  keyword == "not" ||
+  keyword == "pattern" ||
+  keyword == "format" ||
+  keyword == "minItems" ||
+  keyword == "maxItems" ||
+  keyword == "additionalProperties"
 }
 
 ///|
