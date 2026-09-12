@@ -941,9 +941,27 @@ fn validate_schema_definition(
     None => ()
   }
   match schema.min_length {
-    Some(minimum) =>
+    Some(minimum) => {
+      if minimum < 0 {
+        issues.push(
+          error(
+            "schema.length.negative",
+            path + ".minLength",
+            "schema minLength must not be negative",
+          ),
+        )
+      }
       match schema.max_length {
-        Some(maximum) =>
+        Some(maximum) => {
+          if maximum < 0 {
+            issues.push(
+              error(
+                "schema.length.negative",
+                path + ".maxLength",
+                "schema maxLength must not be negative",
+              ),
+            )
+          }
           if minimum > maximum {
             issues.push(
               error(
@@ -951,8 +969,10 @@ fn validate_schema_definition(
               ),
             )
           }
+        }
         None => ()
       }
+    }
     None => ()
   }
   for keyword in schema.unsupported_keywords {

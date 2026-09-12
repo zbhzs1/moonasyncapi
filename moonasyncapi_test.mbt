@@ -90,6 +90,18 @@ test "diagnoses duplicate and empty required fields" {
 }
 
 ///|
+test "rejects negative string length constraints" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Lengths\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"string\",\"minLength\":-1,\"maxLength\":-2}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="3")
+  inspect(issues[0].code, content="schema.length.negative")
+  inspect(issues[1].code, content="schema.length.negative")
+  inspect(issues[2].code, content="schema.length.invalid")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",
