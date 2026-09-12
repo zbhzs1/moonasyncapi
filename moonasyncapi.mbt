@@ -498,6 +498,18 @@ pub fn diff(
             )
           }
         }
+        for message_name, old_message in old_channel.messages {
+          match new_channel.messages.get(message_name) {
+            Some(new_message) =>
+              compare_message_compatibility(
+                old_message,
+                new_message,
+                "$.channels." + name + ".messages." + message_name,
+                issues,
+              )
+            None => ()
+          }
+        }
       }
     }
   }
@@ -526,6 +538,36 @@ pub fn diff(
           "compat.schema.added",
           "$.components.schemas." + name,
           "schema was added",
+        ),
+      )
+    }
+  }
+  for name, old_message in before.messages {
+    match after.messages.get(name) {
+      None =>
+        issues.push(
+          error(
+            "compat.component_message.removed",
+            "$.components.messages." + name,
+            "component message was removed",
+          ),
+        )
+      Some(new_message) =>
+        compare_message_compatibility(
+          old_message,
+          new_message,
+          "$.components.messages." + name,
+          issues,
+        )
+    }
+  }
+  for name, _ in after.messages {
+    if before.messages.get(name) is None {
+      issues.push(
+        info(
+          "compat.component_message.added",
+          "$.components.messages." + name,
+          "component message was added",
         ),
       )
     }
@@ -662,6 +704,65 @@ fn compare_channel_parameters(
         ),
       )
     }
+  }
+}
+
+///|
+fn compare_message_compatibility(
+  before : AsyncApiMessage,
+  after : AsyncApiMessage,
+  path : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  if before.content_type != after.content_type {
+    issues.push(
+      error(
+        "compat.message.content_type.changed",
+        path + ".contentType",
+        "message content type changed",
+      ),
+    )
+  }
+  if before.title != after.title {
+    issues.push(
+      info(
+        "compat.message.title.changed",
+        path + ".title",
+        "message title changed",
+      ),
+    )
+  }
+  match before.payload {
+    Some(old_schema) =>
+      match after.payload {
+        Some(new_schema) =>
+          compare_schema_compatibility(
+            old_schema,
+            new_schema,
+            path + ".payload",
+            issues,
+          )
+        None =>
+          issues.push(
+            error(
+              "compat.message.payload.removed",
+              path + ".payload",
+              "message payload schema was removed",
+            ),
+          )
+      }
+    None =>
+      match after.payload {
+        Some(_) =>
+          issues.push(
+            info(
+              "compat.message.payload.added",
+              path + ".payload",
+              "message payload schema was added",
+            ),
+          )
+        None => ()
+      }
   }
 }
 

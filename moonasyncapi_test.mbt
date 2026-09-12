@@ -281,6 +281,35 @@ test "rejects missing and invalid channel parameter values" {
 }
 
 ///|
+test "reports channel message payload compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"title\":\"Created\",\"contentType\":\"application/json\",\"payload\":{\"type\":\"string\",\"maxLength\":20}}}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"title\":\"Created event\",\"contentType\":\"text/plain\",\"payload\":{\"type\":\"string\",\"maxLength\":10}}}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="3")
+  inspect(issues[0].code, content="compat.message.content_type.changed")
+  inspect(issues[1].code, content="compat.message.title.changed")
+  inspect(issues[2].code, content="compat.schema.max_length.tightened")
+}
+
+///|
+test "reports reusable component message additions and removals" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{},\"components\":{\"messages\":{\"Old\":{\"payload\":{\"type\":\"string\"}}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{},\"components\":{\"messages\":{\"New\":{\"payload\":{\"type\":\"string\"}}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="compat.component_message.removed")
+  inspect(issues[1].code, content="compat.component_message.added")
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",
