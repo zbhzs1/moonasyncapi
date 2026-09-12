@@ -32,6 +32,7 @@ pub struct AsyncApiDocument {
   channels : Map[String, AsyncApiChannel]
   operations : Array[AsyncApiOperation]
   schemas : Map[String, Schema]
+  messages : Map[String, AsyncApiMessage]
 } derive(Eq, @debug.Debug)
 
 pub struct AsyncApiMessage {

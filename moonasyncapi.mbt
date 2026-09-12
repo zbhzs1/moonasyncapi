@@ -11,6 +11,7 @@ pub struct AsyncApiDocument {
   channels : Map[String, AsyncApiChannel]
   operations : Array[AsyncApiOperation]
   schemas : Map[String, Schema]
+  messages : Map[String, AsyncApiMessage]
 } derive(Eq, Debug)
 
 ///|
@@ -138,7 +139,8 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
     for message_name in operation.messages {
       match document.channels.get(operation.channel) {
         Some(channel) =>
-          if channel.messages.get(message_name) is None {
+          if channel.messages.get(message_name) is None &&
+            document.messages.get(message_name) is None {
             issues.push(
               error(
                 "operation.message.missing",
@@ -283,6 +285,7 @@ fn parse_document(value : Json) -> Result[AsyncApiDocument, String] {
     Err(message) => return Err(message)
   }
   let schemas = parse_schemas(root)
+  let messages = parse_component_messages(root, schemas)
   let channels = match root.get("channels") {
     Some(Object(value)) => parse_channels(value, schemas)
     Some(_) => return Err("$.channels must be an object".to_string())
@@ -293,7 +296,15 @@ fn parse_document(value : Json) -> Result[AsyncApiDocument, String] {
     Some(_) => return Err("$.operations must be an object".to_string())
     None => []
   }
-  Ok({ asyncapi, version: asyncapi, title, channels, operations, schemas })
+  Ok({
+    asyncapi,
+    version: asyncapi,
+    title,
+    channels,
+    operations,
+    schemas,
+    messages,
+  })
 }
 
 ///|
@@ -305,6 +316,26 @@ fn parse_schemas(root : Map[String, Json]) -> Map[String, Schema] {
         Some(Object(raw)) =>
           for name, value in raw {
             result[name] = parse_schema(value)
+          }
+        _ => ()
+      }
+    _ => ()
+  }
+  result
+}
+
+///|
+fn parse_component_messages(
+  root : Map[String, Json],
+  schemas : Map[String, Schema],
+) -> Map[String, AsyncApiMessage] {
+  let result : Map[String, AsyncApiMessage] = Map([])
+  match root.get("components") {
+    Some(Object(components)) =>
+      match components.get("messages") {
+        Some(Object(raw)) =>
+          for name, value in raw {
+            result[name] = parse_message(name, value, schemas)
           }
         _ => ()
       }

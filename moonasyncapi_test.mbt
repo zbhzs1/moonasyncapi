@@ -126,6 +126,15 @@ test "reports an array item type mismatch" {
 }
 
 ///|
+test "accepts an operation that references a component message" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Orders\"},\"channels\":{\"orders\":{\"address\":\"orders\"}},\"operations\":{\"receiveOrders\":{\"action\":\"receive\",\"channel\":{\"$ref\":\"#/channels/orders\"},\"messages\":[{\"$ref\":\"#/components/messages/OrderCreated\"}]}},\"components\":{\"messages\":{\"OrderCreated\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"]}}}}}",
+  ).unwrap()
+  inspect(document.messages.length(), content="1")
+  inspect(validate(document).length(), content="0")
+}
+
+///|
 test "reports removed channels" {
   let before = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"API\"},\"channels\":{\"orders\":{\"address\":\"orders\",\"messages\":{\"created\":{}}}}}",
