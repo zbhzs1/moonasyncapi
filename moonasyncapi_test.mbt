@@ -139,6 +139,30 @@ test "resolves nested schema references in object properties" {
 }
 
 ///|
+test "diagnoses invalid component schema definitions" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Invalid schema\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"$ref\":\"#/components/schemas/Bad\"}}}}},\"components\":{\"schemas\":{\"Bad\":{\"type\":\"date\",\"minimum\":10,\"maximum\":1}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="schema.type.unsupported")
+  inspect(issues[1].code, content="schema.range.invalid")
+}
+
+///|
+test "diagnoses unresolved nested payload references" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Broken nested ref\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"meta\":{\"$ref\":\"#/components/schemas/Missing\"}}}}}}}}",
+  ).unwrap()
+  let message = document.channels.get("events").unwrap().messages
+    .get("event")
+    .unwrap()
+  let issues = validate_payload(message, @json.parse("{\"meta\":{}}"))
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="schema.ref.missing")
+}
+
+///|
 test "accepts an operation that references a component message" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Orders\"},\"channels\":{\"orders\":{\"address\":\"orders\"}},\"operations\":{\"receiveOrders\":{\"action\":\"receive\",\"channel\":{\"$ref\":\"#/channels/orders\"},\"messages\":[{\"$ref\":\"#/components/messages/OrderCreated\"}]}},\"components\":{\"messages\":{\"OrderCreated\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"]}}}}}",

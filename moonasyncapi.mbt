@@ -116,6 +116,9 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
       validate_message(message, path + ".messages." + message_name, issues)
     }
   }
+  for name, schema in document.schemas {
+    validate_schema_definition(schema, "$.components.schemas." + name, issues)
+  }
   for operation in document.operations {
     let path = "$.operations." + operation.name
     if operation.action != "send" && operation.action != "receive" {
@@ -663,12 +666,77 @@ fn validate_message(
 }
 
 ///|
+fn validate_schema_definition(
+  schema : Schema,
+  path : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  match schema.kind {
+    Some(kind) =>
+      if !is_supported_schema_kind(kind) {
+        issues.push(
+          warning(
+            "schema.type.unsupported",
+            path + ".type",
+            "schema type is outside the supported subset: " + kind,
+          ),
+        )
+      }
+    None => ()
+  }
+  match schema.minimum {
+    Some(minimum) =>
+      match schema.maximum {
+        Some(maximum) =>
+          if minimum > maximum {
+            issues.push(
+              error(
+                "schema.range.invalid", path, "schema minimum must not exceed maximum",
+              ),
+            )
+          }
+        None => ()
+      }
+    None => ()
+  }
+  for name, property in schema.properties {
+    validate_schema_definition(property, path + ".properties." + name, issues)
+  }
+  match schema.items {
+    Some(items) => validate_schema_definition(items, path + ".items", issues)
+    None => ()
+  }
+}
+
+///|
+fn is_supported_schema_kind(kind : String) -> Bool {
+  kind == "string" ||
+  kind == "number" ||
+  kind == "integer" ||
+  kind == "boolean" ||
+  kind == "null" ||
+  kind == "object" ||
+  kind == "array"
+}
+
+///|
 fn validate_json_schema(
   schema : Schema,
   value : Json,
   path : String,
   issues : Array[Diagnostic],
 ) -> Unit {
+  match schema.ref_name {
+    Some(reference) =>
+      issues.push(
+        error(
+          "schema.ref.missing",
+          path + ".$ref",
+          "local schema reference could not be resolved: " + reference,
+        ),
+      )
+    None => ()
+  }
   match schema.kind {
     Some(kind) => {
       let actual = json_kind(value)
