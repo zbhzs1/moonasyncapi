@@ -151,6 +151,13 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
         ),
       )
     }
+    for
+      address_issue in validate_address_template(
+        channel.address,
+        path + ".address",
+      ) {
+      issues.push(address_issue)
+    }
     match channel.binding {
       Some(protocol) =>
         if protocol != "mqtt" && protocol != "kafka" && protocol != "amqp" {
@@ -1018,6 +1025,33 @@ fn is_unsupported_schema_keyword(keyword : String) -> Bool {
   keyword == "minItems" ||
   keyword == "maxItems" ||
   keyword == "additionalProperties"
+}
+
+///|
+/// Validate the simple `{parameter}` address form used by channel examples.
+fn validate_address_template(
+  address : String,
+  path : String,
+) -> Array[Diagnostic] {
+  let issues : Array[Diagnostic] = []
+  let open = address.split("{").length() - 1
+  let close = address.split("}").length() - 1
+  if open != close {
+    issues.push(
+      error(
+        "channel.address.template.unbalanced", path, "channel address template has unbalanced braces",
+      ),
+    )
+    return issues
+  }
+  if address.contains("{}") {
+    issues.push(
+      error(
+        "channel.address.template.empty", path, "channel address template parameter must not be empty",
+      ),
+    )
+  }
+  issues
 }
 
 ///|

@@ -67,6 +67,17 @@ test "exposes parsed contract lookup APIs" {
 }
 
 ///|
+test "diagnoses malformed channel address templates" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Addresses\"},\"channels\":{\"broken\":{\"address\":\"devices/{id\"},\"empty\":{\"address\":\"devices/{}\"}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="channel.address.template.unbalanced")
+  inspect(issues[1].code, content="channel.address.template.empty")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",
