@@ -89,6 +89,16 @@ test "detects added and removed component schemas" {
 }
 
 ///|
+test "reports an unresolved local schema reference" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Broken schema\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"$ref\":\"#/components/schemas/Missing\"}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="schema.ref.missing")
+}
+
+///|
 test "reports removed channels" {
   let before = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"API\"},\"channels\":{\"orders\":{\"address\":\"orders\",\"messages\":{\"created\":{}}}}}",

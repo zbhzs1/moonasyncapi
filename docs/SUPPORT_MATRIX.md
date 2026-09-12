@@ -11,7 +11,7 @@ MoonAsyncAPI intentionally implements a documented, testable subset of AsyncAPI
 | Messages | channel messages, title, content type, payload | Message component references are not yet resolved as message objects |
 | Operations | `send` and `receive`, channel and message names | Operation component references are not yet resolved |
 | Schema | `type`, object `properties`, `required`, string `enum` | This is not a complete JSON Schema implementation |
-| Schema references | local `#/components/schemas/...` references | External URLs and cyclic references are not supported |
+| Schema references | top-level local `#/components/schemas/...` payload references | External URLs, nested references and cyclic references are not supported |
 | Bindings | binding name recognition for MQTT, Kafka and AMQP | Binding-specific fields are not interpreted |
 | Payloads | type, required properties and string enum validation | Arrays, numeric constraints and advanced composition are not interpreted |
 | Compatibility | added/removed channels, messages and schemas | Operation/address/schema-shape compatibility is planned, not claimed |

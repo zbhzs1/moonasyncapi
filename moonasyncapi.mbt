@@ -497,16 +497,25 @@ fn validate_message(
   }
   match message.payload {
     Some(schema) =>
-      if schema.kind is None &&
-        schema.ref_name is None &&
-        schema.properties.is_empty() {
-        issues.push(
-          warning(
-            "message.payload.empty",
-            path + ".payload",
-            "payload schema is empty",
-          ),
-        )
+      match schema.ref_name {
+        Some(reference) =>
+          issues.push(
+            error(
+              "schema.ref.missing",
+              path + ".payload.$ref",
+              "local schema reference could not be resolved: " + reference,
+            ),
+          )
+        None =>
+          if schema.kind is None && schema.properties.is_empty() {
+            issues.push(
+              warning(
+                "message.payload.empty",
+                path + ".payload",
+                "payload schema is empty",
+              ),
+            )
+          }
       }
     None =>
       issues.push(
