@@ -970,7 +970,27 @@ fn validate_schema_definition(
       validate_schema_definition(property, path + ".properties." + name, issues)
     }
   }
+  let seen_required : Map[String, Bool] = Map([])
   for required_name in schema.required {
+    if required_name.length() == 0 {
+      issues.push(
+        warning(
+          "schema.required.empty",
+          path + ".required",
+          "required field name must not be empty",
+        ),
+      )
+    }
+    if seen_required.get(required_name) is Some(_) {
+      issues.push(
+        warning(
+          "schema.required.duplicate",
+          path + ".required",
+          "required field is listed more than once: " + required_name,
+        ),
+      )
+    }
+    seen_required[required_name] = true
     if schema.properties.get(required_name) is None {
       issues.push(
         warning(

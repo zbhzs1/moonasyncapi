@@ -78,6 +78,18 @@ test "diagnoses malformed channel address templates" {
 }
 
 ///|
+test "diagnoses duplicate and empty required fields" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Required fields\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\",\"id\",\"\"],\"properties\":{\"id\":{\"type\":\"string\"}}}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="3")
+  inspect(issues[0].code, content="schema.required.duplicate")
+  inspect(issues[1].code, content="schema.required.empty")
+  inspect(issues[2].code, content="schema.required.unknown")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",
