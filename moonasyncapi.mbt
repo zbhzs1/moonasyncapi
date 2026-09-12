@@ -23,6 +23,15 @@ pub struct AsyncApiServer {
   protocol_version : String?
   pathname : String?
   description : String?
+  variables : Map[String, ServerVariable]
+} derive(Eq, Debug)
+
+///|
+pub struct ServerVariable {
+  name : String
+  default_value : String?
+  enum_values : Array[String]
+  description : String?
 } derive(Eq, Debug)
 
 ///|
@@ -227,6 +236,39 @@ pub fn find_server(
   name : String,
 ) -> AsyncApiServer? {
   document.servers.get(name)
+}
+
+///|
+/// Find a variable declaration on a server.
+pub fn find_server_variable(
+  server : AsyncApiServer,
+  name : String,
+) -> ServerVariable? {
+  server.variables.get(name)
+}
+
+///|
+/// Render a server endpoint using explicit values and declared defaults.
+pub fn render_server_endpoint(
+  server : AsyncApiServer,
+  values : Map[String, String],
+) -> Result[String, String] {
+  let host = match render_server_template(server.host, server, values) {
+    Ok(value) => value
+    Err(message) => return Err(message)
+  }
+  let pathname = match server.pathname {
+    Some(template) =>
+      match render_server_template(template, server, values) {
+        Ok(value) => value
+        Err(message) => return Err(message)
+      }
+    None => ""
+  }
+  if server.protocol.length() == 0 {
+    return Err("server protocol is missing")
+  }
+  Ok(server.protocol + "://" + host + pathname)
 }
 
 ///|
@@ -805,6 +847,122 @@ fn validate_server(
       }
     None => ()
   }
+  validate_server_variables(server, path, issues)
+}
+
+///|
+fn validate_server_variables(
+  server : AsyncApiServer,
+  path : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  let pathname = match server.pathname {
+    Some(value) => value
+    None => ""
+  }
+  let used = address_parameters(server.host + pathname)
+  for name in used {
+    if server.variables.get(name) is None {
+      issues.push(
+        error(
+          "server.variable.missing",
+          path + ".variables." + name,
+          "server template variable has no declaration",
+        ),
+      )
+    }
+  }
+  for name, variable in server.variables {
+    if !contains_string(used, name) {
+      issues.push(
+        warning(
+          "server.variable.unused",
+          path + ".variables." + name,
+          "server variable is not used by host or pathname",
+        ),
+      )
+    }
+    let seen : Map[String, Bool] = Map([])
+    for value in variable.enum_values {
+      if seen.get(value) is Some(_) {
+        issues.push(
+          warning(
+            "server.variable.enum.duplicate",
+            path + ".variables." + name + ".enum",
+            "server variable enum contains a duplicate value: " + value,
+          ),
+        )
+      }
+      seen[value] = true
+    }
+    match variable.default_value {
+      Some(value) =>
+        if variable.enum_values.length() > 0 &&
+          !contains_string(variable.enum_values, value) {
+          issues.push(
+            error(
+              "server.variable.default.invalid",
+              path + ".variables." + name + ".default",
+              "server variable default is outside its enum",
+            ),
+          )
+        }
+      None =>
+        issues.push(
+          warning(
+            "server.variable.default.missing",
+            path + ".variables." + name + ".default",
+            "server variable has no default",
+          ),
+        )
+    }
+  }
+}
+
+///|
+fn render_server_template(
+  template : String,
+  server : AsyncApiServer,
+  values : Map[String, String],
+) -> Result[String, String] {
+  if validate_address_template(template, "$.template").length() > 0 {
+    return Err("server template is malformed")
+  }
+  let mut output = ""
+  for part_index, part in template.split("{") {
+    if part_index == 0 {
+      output = output + part.to_owned()
+    } else {
+      let mut variable_name = ""
+      let mut suffix = ""
+      for closed_index, piece in part.split("}") {
+        if closed_index == 0 {
+          variable_name = piece.to_owned()
+        } else if closed_index == 1 {
+          suffix = piece.to_owned()
+        }
+      }
+      let variable = match server.variables.get(variable_name) {
+        Some(value) => value
+        None => return Err("undeclared server variable: " + variable_name)
+      }
+      let rendered = match values.get(variable_name) {
+        Some(value) => value
+        None =>
+          match variable.default_value {
+            Some(value) => value
+            None =>
+              return Err("missing server variable value: " + variable_name)
+          }
+      }
+      if variable.enum_values.length() > 0 &&
+        !contains_string(variable.enum_values, rendered) {
+        return Err("server variable value is outside enum: " + variable_name)
+      }
+      output = output + rendered + suffix
+    }
+  }
+  Ok(output)
 }
 
 ///|
@@ -874,6 +1032,12 @@ fn compare_servers(
             ),
           )
         }
+        compare_server_variables(
+          old_server,
+          new_server,
+          "$.servers." + name,
+          issues,
+        )
       }
     }
   }
@@ -881,6 +1045,61 @@ fn compare_servers(
     if before.get(name) is None {
       issues.push(
         info("compat.server.added", "$.servers." + name, "server was added"),
+      )
+    }
+  }
+}
+
+///|
+fn compare_server_variables(
+  before : AsyncApiServer,
+  after : AsyncApiServer,
+  path : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  for name, old_variable in before.variables {
+    match after.variables.get(name) {
+      None =>
+        issues.push(
+          error(
+            "compat.server.variable.removed",
+            path + ".variables." + name,
+            "server variable was removed",
+          ),
+        )
+      Some(new_variable) => {
+        for old_value in old_variable.enum_values {
+          if new_variable.enum_values.length() > 0 &&
+            !contains_string(new_variable.enum_values, old_value) {
+            issues.push(
+              error(
+                "compat.server.variable.enum.removed",
+                path + ".variables." + name + ".enum",
+                "server variable enum value was removed: " + old_value,
+              ),
+            )
+          }
+        }
+        if old_variable.default_value != new_variable.default_value {
+          issues.push(
+            warning(
+              "compat.server.variable.default.changed",
+              path + ".variables." + name + ".default",
+              "server variable default changed",
+            ),
+          )
+        }
+      }
+    }
+  }
+  for name, _ in after.variables {
+    if before.variables.get(name) is None {
+      issues.push(
+        info(
+          "compat.server.variable.added",
+          path + ".variables." + name,
+          "server variable was added",
+        ),
       )
     }
   }
@@ -1198,6 +1417,7 @@ fn parse_servers(raw : Map[String, Json]) -> Map[String, AsyncApiServer] {
         let protocol_version = optional_string_field(server, "protocolVersion")
         let pathname = optional_string_field(server, "pathname")
         let description = optional_string_field(server, "description")
+        let variables = parse_server_variables(server)
         result[name] = {
           name,
           host,
@@ -1205,6 +1425,7 @@ fn parse_servers(raw : Map[String, Json]) -> Map[String, AsyncApiServer] {
           protocol_version,
           pathname,
           description,
+          variables,
         }
       }
       _ =>
@@ -1215,8 +1436,48 @@ fn parse_servers(raw : Map[String, Json]) -> Map[String, AsyncApiServer] {
           protocol_version: None,
           pathname: None,
           description: None,
+          variables: Map([]),
         }
     }
+  }
+  result
+}
+
+///|
+fn parse_server_variables(
+  server : Map[String, Json],
+) -> Map[String, ServerVariable] {
+  let result : Map[String, ServerVariable] = Map([])
+  match server.get("variables") {
+    Some(Object(variables)) =>
+      for name, value in variables {
+        match value {
+          Object(variable) => {
+            let default_value = optional_string_field(variable, "default")
+            let description = optional_string_field(variable, "description")
+            let enum_values : Array[String] = []
+            match variable.get("enum") {
+              Some(Array(values)) =>
+                for item in values {
+                  match item {
+                    String(text) => enum_values.push(text)
+                    _ => ()
+                  }
+                }
+              _ => ()
+            }
+            result[name] = { name, default_value, enum_values, description }
+          }
+          _ =>
+            result[name] = {
+              name,
+              default_value: None,
+              enum_values: [],
+              description: None,
+            }
+        }
+      }
+    _ => ()
   }
   result
 }

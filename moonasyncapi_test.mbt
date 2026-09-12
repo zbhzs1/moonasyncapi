@@ -463,6 +463,51 @@ test "reports message header compatibility changes" {
 }
 
 ///|
+test "parses validates and renders server variables" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Variables\"},\"servers\":{\"production\":{\"host\":\"{region}.broker.example.com\",\"protocol\":\"mqtts\",\"pathname\":\"/{tenant}/mqtt\",\"variables\":{\"region\":{\"default\":\"eu\",\"enum\":[\"eu\",\"us\"]},\"tenant\":{\"default\":\"public\"}}}},\"channels\":{}}",
+  ).unwrap()
+  let server = find_server(document, "production").unwrap()
+  inspect(find_server_variable(server, "region") is Some(_), content="true")
+  inspect(
+    render_server_endpoint(server, Map([])).unwrap(),
+    content="mqtts://eu.broker.example.com/public/mqtt",
+  )
+  inspect(
+    render_server_endpoint(server, Map([("region", "us"), ("tenant", "acme")])).unwrap(),
+    content="mqtts://us.broker.example.com/acme/mqtt",
+  )
+  inspect(validate(document).length(), content="1")
+}
+
+///|
+test "diagnoses malformed server variable declarations" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Variables\"},\"servers\":{\"production\":{\"host\":\"{region}.example.com\",\"protocol\":\"mqtt\",\"variables\":{\"unused\":{},\"region\":{\"default\":\"apac\",\"enum\":[\"eu\",\"eu\"]}}}},\"channels\":{}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="5")
+  inspect(diagnostics_by_severity(issues, "error").length(), content="1")
+  inspect(diagnostics_by_severity(issues, "warning").length(), content="4")
+}
+
+///|
+test "reports server variable compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"variables\":{\"region\":{\"default\":\"eu\",\"enum\":[\"eu\",\"us\"]},\"tenant\":{\"default\":\"public\"}}}},\"channels\":{}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"variables\":{\"region\":{\"default\":\"us\",\"enum\":[\"eu\"]},\"stage\":{\"default\":\"prod\"}}}},\"channels\":{}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="4")
+  inspect(issues[0].code, content="compat.server.variable.enum.removed")
+  inspect(issues[1].code, content="compat.server.variable.default.changed")
+  inspect(issues[2].code, content="compat.server.variable.removed")
+  inspect(issues[3].code, content="compat.server.variable.added")
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",

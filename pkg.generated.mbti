@@ -34,11 +34,15 @@ pub fn find_schema(AsyncApiDocument, String) -> Schema?
 
 pub fn find_server(AsyncApiDocument, String) -> AsyncApiServer?
 
+pub fn find_server_variable(AsyncApiServer, String) -> ServerVariable?
+
 pub fn highest_severity(Array[Diagnostic]) -> String
 
 pub fn parse(String) -> Result[AsyncApiDocument, String]
 
 pub fn render_channel_address(AsyncApiChannel, Map[String, String]) -> Result[String, String]
+
+pub fn render_server_endpoint(AsyncApiServer, Map[String, String]) -> Result[String, String]
 
 pub fn summarize_diagnostics(Array[Diagnostic]) -> DiagnosticSummary
 
@@ -95,6 +99,7 @@ pub struct AsyncApiServer {
   protocol_version : String?
   pathname : String?
   description : String?
+  variables : Map[String, ServerVariable]
 } derive(Eq, @debug.Debug)
 
 pub struct ChannelParameter {
@@ -142,6 +147,13 @@ pub struct Schema {
   min_properties : Double?
   max_properties : Double?
   unsupported_keywords : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub struct ServerVariable {
+  name : String
+  default_value : String?
+  enum_values : Array[String]
+  description : String?
 } derive(Eq, @debug.Debug)
 
 // Type aliases
