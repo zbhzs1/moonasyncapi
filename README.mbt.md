@@ -4,9 +4,10 @@ MoonBit library for reading and validating a documented subset of AsyncAPI 3.0 J
 It turns event-driven API contracts into typed channel, operation, message, and payload
 diagnostics that can be used before an MQTT or other message adapter sends data.
 
-The current release implements local references, channel/message extraction, a small JSON
-Schema subset, MQTT/Kafka/AMQP binding-name recognition, payload validation, and stable
-compatibility diagnostics. See `docs/SUPPORT_MATRIX.md` for the exact boundary.
+The current release implements local references, channel/message extraction, address
+parameter checks, a documented JSON Schema subset, MQTT/Kafka/AMQP binding-name
+recognition, payload validation, and stable compatibility diagnostics. See
+`docs/SUPPORT_MATRIX.md` for the exact boundary.
 
 ## Verification
 

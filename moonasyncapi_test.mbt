@@ -1,7 +1,7 @@
 ///|
 test "parse and validate a minimal AsyncAPI document" {
   let document = parse(
-    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Temperature API\"},\"channels\":{\"temperature\":{\"address\":\"devices/{id}/temperature\",\"messages\":{\"reported\":{\"payload\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"number\"}}}}}}}}",
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Temperature API\"},\"channels\":{\"temperature\":{\"address\":\"devices/{id}/temperature\",\"parameters\":{\"id\":{}},\"messages\":{\"reported\":{\"payload\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"number\"}}}}}}}}",
   ).unwrap()
   inspect(document.version, content="3.0.0")
   inspect(document.channels.length(), content="1")
@@ -200,6 +200,52 @@ test "validates reusable component messages" {
   inspect(issues.length(), content="2")
   inspect(issues[0].code, content="message.content_type.invalid")
   inspect(issues[1].code, content="message.payload.missing")
+}
+
+///|
+test "parses and validates channel parameters" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Devices\"},\"channels\":{\"events\":{\"address\":\"devices/{region}/{id}\",\"parameters\":{\"region\":{\"description\":\"Region\",\"enum\":[\"eu\",\"us\"],\"default\":\"eu\"},\"id\":{\"location\":\"$message.header#/id\"}}}}}",
+  ).unwrap()
+  let channel = find_channel(document, "events").unwrap()
+  let parameters = address_parameters(channel.address)
+  inspect(parameters.length(), content="2")
+  inspect(parameters[0], content="region")
+  inspect(parameters[1], content="id")
+  inspect(
+    find_channel_parameter(channel, "region").unwrap().default_value.unwrap(),
+    content="eu",
+  )
+  inspect(validate(document).length(), content="0")
+}
+
+///|
+test "diagnoses inconsistent channel parameter declarations" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Devices\"},\"channels\":{\"events\":{\"address\":\"devices/{region}/{region}/{id}\",\"parameters\":{\"region\":{\"enum\":[\"eu\",\"eu\"],\"default\":\"apac\"},\"unused\":{}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="5")
+  inspect(issues[0].code, content="channel.parameter.duplicate")
+  inspect(issues[1].code, content="channel.parameter.missing")
+  inspect(issues[2].code, content="channel.parameter.enum.duplicate")
+  inspect(issues[3].code, content="channel.parameter.default.invalid")
+  inspect(issues[4].code, content="channel.parameter.unused")
+}
+
+///|
+test "reports channel parameter compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{\"events\":{\"address\":\"events\",\"parameters\":{\"region\":{\"enum\":[\"eu\",\"us\"]},\"id\":{}}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{\"events\":{\"address\":\"events\",\"parameters\":{\"region\":{\"enum\":[\"eu\"]},\"tenant\":{}}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="3")
+  inspect(issues[0].code, content="compat.channel.parameter.enum.removed")
+  inspect(issues[1].code, content="compat.channel.parameter.removed")
+  inspect(issues[2].code, content="compat.channel.parameter.added")
 }
 
 ///|

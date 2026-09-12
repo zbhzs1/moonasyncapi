@@ -9,7 +9,7 @@ fn example_payload() -> Result[Json, String] {
 ///|
 /// Runnable contract validation and payload compatibility demonstration.
 fn main {
-  let input = "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Temperature API\"},\"channels\":{\"temperature\":{\"address\":\"devices/{id}/temperature\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"reported\":{\"payload\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"number\"}},\"required\":[\"value\"]}}}}}}"
+  let input = "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Temperature API\"},\"channels\":{\"temperature\":{\"address\":\"devices/{id}/temperature\",\"parameters\":{\"id\":{\"description\":\"Device identifier\"}},\"bindings\":{\"mqtt\":{}},\"messages\":{\"reported\":{\"payload\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"number\"}},\"required\":[\"value\"]}}}}}}"
   match @lib.parse(input) {
     Ok(document) => {
       println("AsyncAPI " + document.version + " is readable")

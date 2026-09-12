@@ -19,6 +19,16 @@ pub struct AsyncApiChannel {
   address : String
   messages : Map[String, AsyncApiMessage]
   binding : String?
+  parameters : Map[String, ChannelParameter]
+} derive(Eq, Debug)
+
+///|
+pub struct ChannelParameter {
+  name : String
+  description : String?
+  location : String?
+  enum_values : Array[String]
+  default_value : String?
 } derive(Eq, Debug)
 
 ///|
@@ -91,6 +101,34 @@ pub fn find_channel(
   name : String,
 ) -> AsyncApiChannel? {
   document.channels.get(name)
+}
+
+///|
+/// Find a declared parameter on a channel.
+pub fn find_channel_parameter(
+  channel : AsyncApiChannel,
+  name : String,
+) -> ChannelParameter? {
+  channel.parameters.get(name)
+}
+
+///|
+/// Extract parameter names from a channel address in declaration order.
+pub fn address_parameters(address : String) -> Array[String] {
+  let result : Array[String] = []
+  let parts = address.split("{")
+  for index, part in parts {
+    if index > 0 {
+      if part.contains("}") {
+        for closed_index, value in part.split("}") {
+          if closed_index == 0 && value.length() > 0 {
+            result.push(value.to_owned())
+          }
+        }
+      }
+    }
+  }
+  result
 }
 
 ///|
@@ -244,6 +282,7 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
       ) {
       issues.push(address_issue)
     }
+    validate_channel_parameters(channel, path, issues)
     match channel.binding {
       Some(protocol) =>
         if protocol != "mqtt" && protocol != "kafka" && protocol != "amqp" {
@@ -383,6 +422,12 @@ pub fn diff(
             ),
           )
         }
+        compare_channel_parameters(
+          old_channel,
+          new_channel,
+          "$.channels." + name,
+          issues,
+        )
         for message_name, _ in old_channel.messages {
           if new_channel.messages.get(message_name) is None {
             issues.push(
@@ -515,6 +560,61 @@ pub fn diff(
     }
   }
   issues
+}
+
+///|
+fn compare_channel_parameters(
+  before : AsyncApiChannel,
+  after : AsyncApiChannel,
+  path : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  for name, old_parameter in before.parameters {
+    match after.parameters.get(name) {
+      None =>
+        issues.push(
+          error(
+            "compat.channel.parameter.removed",
+            path + ".parameters." + name,
+            "channel parameter was removed",
+          ),
+        )
+      Some(new_parameter) => {
+        if old_parameter.location != new_parameter.location {
+          issues.push(
+            warning(
+              "compat.channel.parameter.location.changed",
+              path + ".parameters." + name + ".location",
+              "channel parameter location changed",
+            ),
+          )
+        }
+        for old_value in old_parameter.enum_values {
+          if new_parameter.enum_values.length() > 0 &&
+            !contains_string(new_parameter.enum_values, old_value) {
+            issues.push(
+              error(
+                "compat.channel.parameter.enum.removed",
+                path + ".parameters." + name + ".enum",
+                "channel parameter enum value was removed: " + old_value,
+              ),
+            )
+          }
+        }
+      }
+    }
+  }
+  for name, _ in after.parameters {
+    if before.parameters.get(name) is None {
+      issues.push(
+        info(
+          "compat.channel.parameter.added",
+          path + ".parameters." + name,
+          "channel parameter was added",
+        ),
+      )
+    }
+  }
 }
 
 ///|
@@ -748,10 +848,64 @@ fn parse_channels(
             }
           _ => ()
         }
-        result[name] = { address, messages, binding }
+        let parameters = parse_channel_parameters(object)
+        result[name] = { address, messages, binding, parameters }
       }
-      _ => result[name] = { address: "", messages: Map([]), binding: None }
+      _ =>
+        result[name] = {
+          address: "",
+          messages: Map([]),
+          binding: None,
+          parameters: Map([]),
+        }
     }
+  }
+  result
+}
+
+///|
+fn parse_channel_parameters(
+  channel : Map[String, Json],
+) -> Map[String, ChannelParameter] {
+  let result : Map[String, ChannelParameter] = Map([])
+  match channel.get("parameters") {
+    Some(Object(parameters)) =>
+      for name, value in parameters {
+        match value {
+          Object(parameter) => {
+            let description = optional_string_field(parameter, "description")
+            let location = optional_string_field(parameter, "location")
+            let default_value = optional_string_field(parameter, "default")
+            let enum_values : Array[String] = []
+            match parameter.get("enum") {
+              Some(Array(values)) =>
+                for item in values {
+                  match item {
+                    String(text) => enum_values.push(text)
+                    _ => ()
+                  }
+                }
+              _ => ()
+            }
+            result[name] = {
+              name,
+              description,
+              location,
+              enum_values,
+              default_value,
+            }
+          }
+          _ =>
+            result[name] = {
+              name,
+              description: None,
+              location: None,
+              enum_values: [],
+              default_value: None,
+            }
+        }
+      }
+    _ => ()
   }
   result
 }
@@ -1287,6 +1441,88 @@ fn validate_address_template(
     )
   }
   issues
+}
+
+///|
+fn validate_channel_parameters(
+  channel : AsyncApiChannel,
+  path : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  let template_names = address_parameters(channel.address)
+  let seen : Map[String, Bool] = Map([])
+  for name in template_names {
+    if seen.get(name) is Some(_) {
+      issues.push(
+        warning(
+          "channel.parameter.duplicate",
+          path + ".address",
+          "channel address uses a parameter more than once: " + name,
+        ),
+      )
+    }
+    seen[name] = true
+    if channel.parameters.get(name) is None {
+      issues.push(
+        error(
+          "channel.parameter.missing",
+          path + ".parameters." + name,
+          "address parameter has no declaration",
+        ),
+      )
+    }
+  }
+  for name, parameter in channel.parameters {
+    if !contains_string(template_names, name) {
+      issues.push(
+        warning(
+          "channel.parameter.unused",
+          path + ".parameters." + name,
+          "declared parameter is not used by the channel address",
+        ),
+      )
+    }
+    match parameter.location {
+      Some(location) =>
+        if location.length() == 0 {
+          issues.push(
+            warning(
+              "channel.parameter.location.empty",
+              path + ".parameters." + name + ".location",
+              "parameter location must not be empty when supplied",
+            ),
+          )
+        }
+      None => ()
+    }
+    let enum_seen : Map[String, Bool] = Map([])
+    for value in parameter.enum_values {
+      if enum_seen.get(value) is Some(_) {
+        issues.push(
+          warning(
+            "channel.parameter.enum.duplicate",
+            path + ".parameters." + name + ".enum",
+            "parameter enum contains a duplicate value: " + value,
+          ),
+        )
+      }
+      enum_seen[value] = true
+    }
+    match parameter.default_value {
+      Some(value) =>
+        if parameter.enum_values.length() > 0 &&
+          !contains_string(parameter.enum_values, value) {
+          issues.push(
+            error(
+              "channel.parameter.default.invalid",
+              path + ".parameters." + name + ".default",
+              "parameter default is not present in its enum",
+            ),
+          )
+        }
+      None => ()
+    }
+  }
 }
 
 ///|
@@ -1862,6 +2098,14 @@ fn object_field(
 fn number_field(object : Map[String, Json], name : String) -> Double? {
   match object.get(name) {
     Some(Number(value, ..)) => Some(value)
+    _ => None
+  }
+}
+
+///|
+fn optional_string_field(object : Map[String, Json], name : String) -> String? {
+  match object.get(name) {
+    Some(String(value)) => Some(value)
     _ => None
   }
 }

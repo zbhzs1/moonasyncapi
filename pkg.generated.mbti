@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn address_parameters(String) -> Array[String]
+
 pub fn diagnostics_by_severity(Array[Diagnostic], String) -> Array[Diagnostic]
 
 pub fn diagnostics_count(Array[Diagnostic], String) -> Int
@@ -21,6 +23,8 @@ pub fn diff(AsyncApiDocument, AsyncApiDocument) -> Array[Diagnostic]
 pub fn document_summary(AsyncApiDocument) -> String
 
 pub fn find_channel(AsyncApiDocument, String) -> AsyncApiChannel?
+
+pub fn find_channel_parameter(AsyncApiChannel, String) -> ChannelParameter?
 
 pub fn find_message(AsyncApiDocument, String) -> AsyncApiMessage?
 
@@ -47,6 +51,7 @@ pub struct AsyncApiChannel {
   address : String
   messages : Map[String, AsyncApiMessage]
   binding : String?
+  parameters : Map[String, ChannelParameter]
 } derive(Eq, @debug.Debug)
 
 pub struct AsyncApiDocument {
@@ -72,6 +77,14 @@ pub struct AsyncApiOperation {
   channel : String
   messages : Array[String]
   protocol : String?
+} derive(Eq, @debug.Debug)
+
+pub struct ChannelParameter {
+  name : String
+  description : String?
+  location : String?
+  enum_values : Array[String]
+  default_value : String?
 } derive(Eq, @debug.Debug)
 
 pub struct Diagnostic {
