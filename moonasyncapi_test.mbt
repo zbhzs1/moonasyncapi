@@ -41,6 +41,16 @@ test "warns when operation protocol disagrees with channel binding" {
 }
 
 ///|
+test "warns about duplicate operation messages" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Duplicates\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"messages\":[\"created\",\"created\"]}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="operation.messages.duplicate")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",

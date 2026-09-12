@@ -163,7 +163,18 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
         }
       None => ()
     }
+    let seen_messages : Map[String, Bool] = Map([])
     for message_name in operation.messages {
+      if seen_messages.get(message_name) is Some(_) {
+        issues.push(
+          warning(
+            "operation.messages.duplicate",
+            path + ".messages",
+            "operation lists the same message more than once: " + message_name,
+          ),
+        )
+      }
+      seen_messages[message_name] = true
       match document.channels.get(operation.channel) {
         Some(channel) =>
           if channel.messages.get(message_name) is None &&
