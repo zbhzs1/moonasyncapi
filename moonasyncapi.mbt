@@ -57,6 +57,8 @@ pub struct AsyncApiMessage {
   title : String
   content_type : String?
   payload : Schema?
+  headers : Schema?
+  correlation_id_location : String?
 } derive(Eq, Debug)
 
 ///|
@@ -909,6 +911,47 @@ fn compare_message_compatibility(
       ),
     )
   }
+  if before.correlation_id_location != after.correlation_id_location {
+    issues.push(
+      warning(
+        "compat.message.correlation_id.changed",
+        path + ".correlationId.location",
+        "message correlationId location changed",
+      ),
+    )
+  }
+  match before.headers {
+    Some(old_schema) =>
+      match after.headers {
+        Some(new_schema) =>
+          compare_schema_compatibility(
+            old_schema,
+            new_schema,
+            path + ".headers",
+            issues,
+          )
+        None =>
+          issues.push(
+            error(
+              "compat.message.headers.removed",
+              path + ".headers",
+              "message headers schema was removed",
+            ),
+          )
+      }
+    None =>
+      match after.headers {
+        Some(_) =>
+          issues.push(
+            info(
+              "compat.message.headers.added",
+              path + ".headers",
+              "message headers schema was added",
+            ),
+          )
+        None => ()
+      }
+  }
   match before.payload {
     Some(old_schema) =>
       match after.payload {
@@ -976,6 +1019,25 @@ pub fn validate_payload(
       issues.push(
         error(
           "message.payload.missing", "$.payload", "message has no payload schema",
+        ),
+      )
+  }
+  issues
+}
+
+///|
+/// Validate message headers against the declared headers schema.
+pub fn validate_headers(
+  message : AsyncApiMessage,
+  headers : Json,
+) -> Array[Diagnostic] {
+  let issues : Array[Diagnostic] = []
+  match message.headers {
+    Some(schema) => validate_json_schema(schema, headers, "$.headers", issues)
+    None =>
+      issues.push(
+        warning(
+          "message.headers.missing", "$.headers", "message has no headers schema",
         ),
       )
   }
@@ -1348,9 +1410,26 @@ fn parse_message(
         Some(value) => Some(resolve_schema(parse_schema(value), schemas))
         None => None
       }
-      { name, title, content_type, payload }
+      let headers = match object.get("headers") {
+        Some(value) => Some(resolve_schema(parse_schema(value), schemas))
+        None => None
+      }
+      let correlation_id_location = match object.get("correlationId") {
+        Some(Object(correlation)) =>
+          optional_string_field(correlation, "location")
+        _ => None
+      }
+      { name, title, content_type, payload, headers, correlation_id_location }
     }
-    _ => { name, title: name, content_type: None, payload: None }
+    _ =>
+      {
+        name,
+        title: name,
+        content_type: None,
+        payload: None,
+        headers: None,
+        correlation_id_location: None,
+      }
   }
 }
 
@@ -1531,6 +1610,26 @@ fn validate_message(
             "contentType should use a type/subtype media type",
           ),
         )
+      }
+    None => ()
+  }
+  match message.correlation_id_location {
+    Some(location) =>
+      if location.length() == 0 {
+        issues.push(
+          warning(
+            "message.correlation_id.location.empty",
+            path + ".correlationId.location",
+            "correlationId location must not be empty",
+          ),
+        )
+      }
+    None => ()
+  }
+  match message.headers {
+    Some(schema) =>
+      if schema.ref_name is None {
+        validate_schema_definition(schema, path + ".headers", issues)
       }
     None => ()
   }

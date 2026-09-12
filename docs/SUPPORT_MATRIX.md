@@ -9,7 +9,7 @@ MoonAsyncAPI intentionally implements a documented, testable subset of AsyncAPI
 | Document metadata | `asyncapi`, `info.title` | Additional metadata is currently ignored |
 | Servers | host, protocol, protocol version, pathname, description | Security schemes and server variables are not yet interpreted |
 | Channels | channel names, `address`, address-template parameters, parameter enum/default validation | Local channel references are accepted in operations |
-| Messages | channel messages and local `#/components/messages/...` references, title, content type, payload | External message references are not supported |
+| Messages | channel messages and local `#/components/messages/...` references, title, content type, payload, headers schema and correlation ID location | External message references are not supported |
 | Operations | `send` and `receive`, channel and message names | Operation component references are not yet resolved |
 | Schema | `type`, object `properties`, `required`, `minProperties`/`maxProperties`, typed `enum`, `const`, validated `default`/`examples`, `minLength`/`maxLength`, arrays, `minItems`/`maxItems`/`uniqueItems`, integer checks, inclusive and exclusive numeric ranges | Unsupported composition and advanced keywords produce diagnostics; this is not a complete JSON Schema implementation |
 | Schema references | local `#/components/schemas/...` payload and nested property references | External URLs and cyclic references are not supported |

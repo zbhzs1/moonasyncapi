@@ -44,6 +44,8 @@ pub fn summarize_diagnostics(Array[Diagnostic]) -> DiagnosticSummary
 
 pub fn validate(AsyncApiDocument) -> Array[Diagnostic]
 
+pub fn validate_headers(AsyncApiMessage, Json) -> Array[Diagnostic]
+
 pub fn validate_operation_payload(AsyncApiDocument, String, Json) -> Array[Diagnostic]
 
 pub fn validate_payload(AsyncApiMessage, Json) -> Array[Diagnostic]
@@ -74,6 +76,8 @@ pub struct AsyncApiMessage {
   title : String
   content_type : String?
   payload : Schema?
+  headers : Schema?
+  correlation_id_location : String?
 } derive(Eq, @debug.Debug)
 
 pub struct AsyncApiOperation {

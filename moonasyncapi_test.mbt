@@ -420,6 +420,49 @@ test "reports schema default changes as informational" {
 }
 
 ///|
+test "parses and validates message headers and correlation ids" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Headers\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"headers\":{\"type\":\"object\",\"required\":[\"trace-id\"],\"properties\":{\"trace-id\":{\"type\":\"string\"}}},\"correlationId\":{\"location\":\"$message.header#/trace-id\"},\"payload\":{\"type\":\"string\"}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  inspect(validate(document).length(), content="0")
+  inspect(validate_headers(message, @json.parse("{}")).length(), content="1")
+  inspect(
+    validate_headers(message, @json.parse("{\"trace-id\":\"abc\"}")).length(),
+    content="0",
+  )
+}
+
+///|
+test "reports absent message header schemas" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Headers\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"string\"}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  let issues = validate_headers(message, @json.parse("{}"))
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="message.headers.missing")
+}
+
+///|
+test "reports message header compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"headers\":{\"type\":\"object\",\"properties\":{\"trace\":{\"type\":\"string\"}}},\"correlationId\":{\"location\":\"$message.header#/trace\"},\"payload\":{\"type\":\"string\"}}}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"headers\":{\"type\":\"object\",\"required\":[\"trace\"],\"properties\":{\"trace\":{\"type\":\"string\"}}},\"correlationId\":{\"location\":\"$message.payload#/trace\"},\"payload\":{\"type\":\"string\"}}}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="compat.message.correlation_id.changed")
+  inspect(issues[1].code, content="compat.schema.required.added")
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",
