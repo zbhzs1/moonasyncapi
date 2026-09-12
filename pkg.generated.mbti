@@ -1,0 +1,70 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonasyncapi/moonasyncapi"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn diagnostics_to_text(Array[Diagnostic]) -> String
+
+pub fn diff(AsyncApiDocument, AsyncApiDocument) -> Array[Diagnostic]
+
+pub fn parse(String) -> Result[AsyncApiDocument, String]
+
+pub fn validate(AsyncApiDocument) -> Array[Diagnostic]
+
+pub fn validate_payload(AsyncApiMessage, Json) -> Array[Diagnostic]
+
+// Errors
+
+// Types and methods
+pub struct AsyncApiChannel {
+  address : String
+  messages : Map[String, AsyncApiMessage]
+  binding : String?
+} derive(Eq, @debug.Debug)
+
+pub struct AsyncApiDocument {
+  asyncapi : String
+  version : String
+  title : String
+  channels : Map[String, AsyncApiChannel]
+  operations : Array[AsyncApiOperation]
+  schemas : Map[String, Schema]
+} derive(Eq, @debug.Debug)
+
+pub struct AsyncApiMessage {
+  name : String
+  title : String
+  content_type : String?
+  payload : Schema?
+} derive(Eq, @debug.Debug)
+
+pub struct AsyncApiOperation {
+  name : String
+  action : String
+  channel : String
+  messages : Array[String]
+  protocol : String?
+} derive(Eq, @debug.Debug)
+
+pub struct Diagnostic {
+  severity : String
+  code : String
+  path : String
+  message : String
+} derive(Eq, @debug.Debug)
+
+pub struct Schema {
+  kind : String?
+  required : Array[String]
+  properties : Map[String, Schema]
+  enum_values : Array[String]
+  ref_name : String?
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+
