@@ -181,7 +181,25 @@ pub fn diff(
             "channel was removed",
           ),
         )
-      Some(new_channel) =>
+      Some(new_channel) => {
+        if old_channel.address != new_channel.address {
+          issues.push(
+            error(
+              "compat.channel.address.changed",
+              "$.channels." + name + ".address",
+              "channel address changed",
+            ),
+          )
+        }
+        if old_channel.binding != new_channel.binding {
+          issues.push(
+            warning(
+              "compat.channel.binding.changed",
+              "$.channels." + name + ".bindings",
+              "channel binding changed",
+            ),
+          )
+        }
         for message_name, _ in old_channel.messages {
           if new_channel.messages.get(message_name) is None {
             issues.push(
@@ -193,6 +211,18 @@ pub fn diff(
             )
           }
         }
+        for message_name, _ in new_channel.messages {
+          if old_channel.messages.get(message_name) is None {
+            issues.push(
+              info(
+                "compat.message.added",
+                "$.channels." + name + ".messages." + message_name,
+                "message was added",
+              ),
+            )
+          }
+        }
+      }
     }
   }
   for name, _ in after.channels {
@@ -220,6 +250,49 @@ pub fn diff(
           "compat.schema.added",
           "$.components.schemas." + name,
           "schema was added",
+        ),
+      )
+    }
+  }
+  for old_operation in before.operations {
+    match find_operation(after.operations, old_operation.name) {
+      None =>
+        issues.push(
+          error(
+            "compat.operation.removed",
+            "$.operations." + old_operation.name,
+            "operation was removed",
+          ),
+        )
+      Some(new_operation) => {
+        if old_operation.channel != new_operation.channel {
+          issues.push(
+            error(
+              "compat.operation.channel.changed",
+              "$.operations." + old_operation.name + ".channel",
+              "operation channel changed",
+            ),
+          )
+        }
+        if old_operation.action != new_operation.action {
+          issues.push(
+            error(
+              "compat.operation.action.changed",
+              "$.operations." + old_operation.name + ".action",
+              "operation action changed",
+            ),
+          )
+        }
+      }
+    }
+  }
+  for new_operation in after.operations {
+    if find_operation(before.operations, new_operation.name) is None {
+      issues.push(
+        info(
+          "compat.operation.added",
+          "$.operations." + new_operation.name,
+          "operation was added",
         ),
       )
     }
@@ -691,6 +764,19 @@ fn contains_string(items : Array[String], value : String) -> Bool {
     }
   }
   false
+}
+
+///|
+fn find_operation(
+  operations : Array[AsyncApiOperation],
+  name : String,
+) -> AsyncApiOperation? {
+  for operation in operations {
+    if operation.name == name {
+      return Some(operation)
+    }
+  }
+  None
 }
 
 ///|

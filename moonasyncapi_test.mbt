@@ -148,6 +148,23 @@ test "reports removed channels" {
 }
 
 ///|
+test "reports channel and operation compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"API\"},\"channels\":{\"orders\":{\"address\":\"orders\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"created\":{}}}},\"operations\":{\"consume\":{\"action\":\"receive\",\"channel\":{\"$ref\":\"#/channels/orders\"}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"API\"},\"channels\":{\"orders\":{\"address\":\"archive/orders\",\"bindings\":{\"kafka\":{}},\"messages\":{\"created\":{},\"updated\":{}}}},\"operations\":{\"consume\":{\"action\":\"send\",\"channel\":{\"$ref\":\"#/channels/orders\"}},\"publish\":{\"action\":\"send\",\"channel\":{\"$ref\":\"#/channels/orders\"}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="5")
+  inspect(issues[0].code, content="compat.channel.address.changed")
+  inspect(issues[1].code, content="compat.channel.binding.changed")
+  inspect(issues[2].code, content="compat.message.added")
+  inspect(issues[3].code, content="compat.operation.action.changed")
+  inspect(issues[4].code, content="compat.operation.added")
+}
+
+///|
 test "rejects malformed root" {
   match parse("[]") {
     Ok(_) => fail("array must not be accepted as a document")
