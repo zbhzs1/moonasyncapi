@@ -99,6 +99,33 @@ test "reports an unresolved local schema reference" {
 }
 
 ///|
+test "validates nested arrays and numeric bounds" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Measurements\"},\"channels\":{\"measurements\":{\"address\":\"measurements\",\"messages\":{\"batch\":{\"payload\":{\"type\":\"array\",\"items\":{\"type\":\"number\",\"minimum\":0,\"maximum\":100}}}}}}}",
+  ).unwrap()
+  let message = document.channels.get("measurements").unwrap().messages
+    .get("batch")
+    .unwrap()
+  let issues = validate_payload(message, @json.parse("[12,101,-1]"))
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="payload.number.maximum")
+  inspect(issues[1].code, content="payload.number.minimum")
+}
+
+///|
+test "reports an array item type mismatch" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Tags\"},\"channels\":{\"tags\":{\"address\":\"tags\",\"messages\":{\"list\":{\"payload\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}}}",
+  ).unwrap()
+  let message = document.channels.get("tags").unwrap().messages
+    .get("list")
+    .unwrap()
+  let issues = validate_payload(message, @json.parse("[\"ok\",false]"))
+  inspect(issues.length(), content="1")
+  inspect(issues[0].path, content="$.payload[1]")
+}
+
+///|
 test "reports removed channels" {
   let before = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"API\"},\"channels\":{\"orders\":{\"address\":\"orders\",\"messages\":{\"created\":{}}}}}",

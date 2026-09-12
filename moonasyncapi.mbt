@@ -44,6 +44,9 @@ pub struct Schema {
   properties : Map[String, Schema]
   enum_values : Array[String]
   ref_name : String?
+  items : Schema?
+  minimum : Double?
+  maximum : Double?
 } derive(Eq, Debug)
 
 ///|
@@ -452,7 +455,22 @@ fn parse_schema(value : Json) -> Schema {
           }
         _ => ()
       }
-      { kind, required, properties, enum_values, ref_name }
+      let items = match object.get("items") {
+        Some(value) => Some(parse_schema(value))
+        None => None
+      }
+      let minimum = number_field(object, "minimum")
+      let maximum = number_field(object, "maximum")
+      {
+        kind,
+        required,
+        properties,
+        enum_values,
+        ref_name,
+        items,
+        minimum,
+        maximum,
+      }
     }
     _ =>
       {
@@ -461,6 +479,9 @@ fn parse_schema(value : Json) -> Schema {
         properties: Map([]),
         enum_values: [],
         ref_name: None,
+        items: None,
+        minimum: None,
+        maximum: None,
       }
   }
 }
@@ -576,6 +597,42 @@ fn validate_json_schema(
           error("payload.enum.invalid", path, "string value is not in enum"),
         )
       }
+    Array(values) =>
+      match schema.items {
+        Some(item_schema) =>
+          for index, item in values {
+            validate_json_schema(
+              item_schema,
+              item,
+              path + "[" + index.to_string() + "]",
+              issues,
+            )
+          }
+        None => ()
+      }
+    _ => ()
+  }
+  match value {
+    Number(number, ..) => {
+      match schema.minimum {
+        Some(minimum) =>
+          if number < minimum {
+            issues.push(
+              error("payload.number.minimum", path, "number is below minimum"),
+            )
+          }
+        None => ()
+      }
+      match schema.maximum {
+        Some(maximum) =>
+          if number > maximum {
+            issues.push(
+              error("payload.number.maximum", path, "number is above maximum"),
+            )
+          }
+        None => ()
+      }
+    }
     _ => ()
   }
 }
@@ -673,6 +730,14 @@ fn object_field(
   match object.get(name) {
     Some(Object(value)) => Ok(value)
     _ => Err(path + " must be an object")
+  }
+}
+
+///|
+fn number_field(object : Map[String, Json], name : String) -> Double? {
+  match object.get(name) {
+    Some(Number(value, ..)) => Some(value)
+    _ => None
   }
 }
 

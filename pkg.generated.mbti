@@ -62,6 +62,9 @@ pub struct Schema {
   properties : Map[String, Schema]
   enum_values : Array[String]
   ref_name : String?
+  items : Schema?
+  minimum : Double?
+  maximum : Double?
 } derive(Eq, @debug.Debug)
 
 // Type aliases
