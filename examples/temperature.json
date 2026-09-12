@@ -1,0 +1,19 @@
+{
+  "asyncapi": "3.0.0",
+  "info": { "title": "Temperature API" },
+  "channels": {
+    "temperature": {
+      "address": "devices/{id}/temperature",
+      "bindings": { "mqtt": {} },
+      "messages": {
+        "reported": {
+          "payload": {
+            "type": "object",
+            "required": ["value"],
+            "properties": { "value": { "type": "number" } }
+          }
+        }
+      }
+    }
+  }
+}

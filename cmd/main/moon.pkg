@@ -1,5 +1,6 @@
 import {
   "moonasyncapi/moonasyncapi" @lib,
+  "moonbitlang/core/json",
 }
 
 pkgtype(kind: "executable")

@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: moonbitlang/setup-moontoolchain@v0.1
+      - name: Format check
+        run: moon fmt --check
+      - name: Type check
+        run: moon check --deny-warn
+      - name: Tests
+        run: moon test
+      - name: Runnable example
+        run: moon run cmd/main

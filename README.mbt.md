@@ -1,20 +1,23 @@
 # MoonAsyncAPI
 
-MoonBit library for reading and validating the core of an AsyncAPI 3.0 JSON document.
+MoonBit library for reading and validating a documented subset of AsyncAPI 3.0 JSON.
+It turns event-driven API contracts into typed channel, operation, message, and payload
+diagnostics that can be used before an MQTT or other message adapter sends data.
 
-This first local prototype implements a typed document model, core channel extraction,
-validation diagnostics, and channel/message compatibility checks. YAML input, full JSON
-Schema support, protocol bindings, code generation, and the browser playground are planned
-only after their implementations and tests exist.
+The current release implements local references, channel/message extraction, a small JSON
+Schema subset, MQTT/Kafka/AMQP binding-name recognition, payload validation, and stable
+compatibility diagnostics. See `docs/SUPPORT_MATRIX.md` for the exact boundary.
 
 ## Verification
 
 ```bash
 moon fmt
-moon check
+moon check --deny-warn
 moon test
 moon run cmd/main
 ```
 
-The project complements CloudEvents, MQTT codecs, and JSON Schema libraries. It does not
-establish network connections or implement a broker or message transport.
+The repository includes `examples/temperature.json`, an MQTT-oriented contract fixture.
+The runnable command uses the same shape to validate a document and a payload without
+network access. The project complements CloudEvents and `zbhzs1/moonbit-mqtt`; it does not
+establish network connections or implement a broker, client, or message transport.
