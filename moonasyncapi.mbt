@@ -48,6 +48,8 @@ pub struct Schema {
   items : Schema?
   minimum : Double?
   maximum : Double?
+  exclusive_minimum : Double?
+  exclusive_maximum : Double?
   min_length : Double?
   max_length : Double?
   min_items : Double?
@@ -792,6 +794,8 @@ fn parse_schema(value : Json) -> Schema {
       }
       let minimum = number_field(object, "minimum")
       let maximum = number_field(object, "maximum")
+      let exclusive_minimum = number_field(object, "exclusiveMinimum")
+      let exclusive_maximum = number_field(object, "exclusiveMaximum")
       let min_length = number_field(object, "minLength")
       let max_length = number_field(object, "maxLength")
       let min_items = number_field(object, "minItems")
@@ -814,6 +818,8 @@ fn parse_schema(value : Json) -> Schema {
         items,
         minimum,
         maximum,
+        exclusive_minimum,
+        exclusive_maximum,
         min_length,
         max_length,
         min_items,
@@ -834,6 +840,8 @@ fn parse_schema(value : Json) -> Schema {
         items: None,
         minimum: None,
         maximum: None,
+        exclusive_minimum: None,
+        exclusive_maximum: None,
         min_length: None,
         max_length: None,
         min_items: None,
@@ -959,6 +967,17 @@ fn validate_schema_definition(
         None => ()
       }
     None => ()
+  }
+  match (schema.exclusive_minimum, schema.exclusive_maximum) {
+    (Some(minimum), Some(maximum)) =>
+      if minimum >= maximum {
+        issues.push(
+          error(
+            "schema.exclusive_range.invalid", path, "exclusiveMinimum must be less than exclusiveMaximum",
+          ),
+        )
+      }
+    _ => ()
   }
   match schema.min_length {
     Some(minimum) => {
@@ -1353,6 +1372,28 @@ fn validate_json_schema(
           }
         None => ()
       }
+      match schema.exclusive_minimum {
+        Some(minimum) =>
+          if number <= minimum {
+            issues.push(
+              error(
+                "payload.number.exclusive_minimum", path, "number must be greater than exclusiveMinimum",
+              ),
+            )
+          }
+        None => ()
+      }
+      match schema.exclusive_maximum {
+        Some(maximum) =>
+          if number >= maximum {
+            issues.push(
+              error(
+                "payload.number.exclusive_maximum", path, "number must be less than exclusiveMaximum",
+              ),
+            )
+          }
+        None => ()
+      }
     }
     _ => ()
   }
@@ -1426,6 +1467,97 @@ fn compare_schema_compatibility(
       error("compat.schema.type.changed", path + ".type", "schema type changed"),
     )
   }
+  compare_lower_bound(
+    before.minimum,
+    after.minimum,
+    path + ".minimum",
+    "compat.schema.minimum.tightened",
+    issues,
+  )
+  compare_upper_bound(
+    before.maximum,
+    after.maximum,
+    path + ".maximum",
+    "compat.schema.maximum.tightened",
+    issues,
+  )
+  compare_lower_bound(
+    before.exclusive_minimum,
+    after.exclusive_minimum,
+    path + ".exclusiveMinimum",
+    "compat.schema.exclusive_minimum.tightened",
+    issues,
+  )
+  compare_upper_bound(
+    before.exclusive_maximum,
+    after.exclusive_maximum,
+    path + ".exclusiveMaximum",
+    "compat.schema.exclusive_maximum.tightened",
+    issues,
+  )
+  compare_lower_bound(
+    before.min_length,
+    after.min_length,
+    path + ".minLength",
+    "compat.schema.min_length.tightened",
+    issues,
+  )
+  compare_upper_bound(
+    before.max_length,
+    after.max_length,
+    path + ".maxLength",
+    "compat.schema.max_length.tightened",
+    issues,
+  )
+  compare_lower_bound(
+    before.min_items,
+    after.min_items,
+    path + ".minItems",
+    "compat.schema.min_items.tightened",
+    issues,
+  )
+  compare_upper_bound(
+    before.max_items,
+    after.max_items,
+    path + ".maxItems",
+    "compat.schema.max_items.tightened",
+    issues,
+  )
+  compare_lower_bound(
+    before.min_properties,
+    after.min_properties,
+    path + ".minProperties",
+    "compat.schema.min_properties.tightened",
+    issues,
+  )
+  compare_upper_bound(
+    before.max_properties,
+    after.max_properties,
+    path + ".maxProperties",
+    "compat.schema.max_properties.tightened",
+    issues,
+  )
+  if !before.unique_items && after.unique_items {
+    issues.push(
+      error(
+        "compat.schema.unique_items.enabled",
+        path + ".uniqueItems",
+        "uniqueItems was enabled",
+      ),
+    )
+  }
+  for old_value in before.enum_values {
+    if after.enum_values.length() > 0 &&
+      !contains_string(after.enum_values, old_value) {
+      issues.push(
+        error(
+          "compat.schema.enum.value.removed",
+          path + ".enum",
+          "enum value was removed: " + old_value,
+        ),
+      )
+    }
+  }
   for required_name in after.required {
     if !contains_string(before.required, required_name) {
       issues.push(
@@ -1498,6 +1630,52 @@ fn compare_schema_compatibility(
           )
         None => ()
       }
+  }
+}
+
+///|
+fn compare_lower_bound(
+  before : Double?,
+  after : Double?,
+  path : String,
+  code : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  match after {
+    Some(new_value) =>
+      match before {
+        Some(old_value) =>
+          if new_value > old_value {
+            issues.push(
+              error(code, path, "lower bound became more restrictive"),
+            )
+          }
+        None => issues.push(error(code, path, "a lower bound was introduced"))
+      }
+    None => ()
+  }
+}
+
+///|
+fn compare_upper_bound(
+  before : Double?,
+  after : Double?,
+  path : String,
+  code : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  match after {
+    Some(new_value) =>
+      match before {
+        Some(old_value) =>
+          if new_value < old_value {
+            issues.push(
+              error(code, path, "upper bound became more restrictive"),
+            )
+          }
+        None => issues.push(error(code, path, "an upper bound was introduced"))
+      }
+    None => ()
   }
 }
 

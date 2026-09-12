@@ -153,6 +153,45 @@ test "integer schemas reject fractional numbers" {
 }
 
 ///|
+test "validates exclusive numeric bounds" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Scores\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"score\":{\"payload\":{\"type\":\"number\",\"exclusiveMinimum\":0,\"exclusiveMaximum\":10}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("score")
+    .unwrap()
+  inspect(validate_payload(message, @json.parse("0")).length(), content="1")
+  inspect(validate_payload(message, @json.parse("5")).length(), content="0")
+  inspect(validate_payload(message, @json.parse("10")).length(), content="1")
+}
+
+///|
+test "diagnoses invalid exclusive numeric ranges" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Ranges\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"score\":{\"payload\":{\"type\":\"number\",\"exclusiveMinimum\":10,\"exclusiveMaximum\":10}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="schema.exclusive_range.invalid")
+}
+
+///|
+test "reports tightened schema constraints" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{},\"components\":{\"schemas\":{\"Batch\":{\"type\":\"array\",\"maxItems\":10,\"uniqueItems\":false,\"items\":{\"type\":\"string\",\"enum\":[\"a\",\"b\"]}}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{},\"components\":{\"schemas\":{\"Batch\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":5,\"uniqueItems\":true,\"items\":{\"type\":\"string\",\"enum\":[\"a\"]}}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="4")
+  inspect(issues[0].code, content="compat.schema.min_items.tightened")
+  inspect(issues[1].code, content="compat.schema.max_items.tightened")
+  inspect(issues[2].code, content="compat.schema.unique_items.enabled")
+  inspect(issues[3].code, content="compat.schema.enum.value.removed")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",
