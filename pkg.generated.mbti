@@ -120,6 +120,8 @@ pub struct Schema {
   required : Array[String]
   properties : Map[String, Schema]
   enum_values : Array[String]
+  enum_json_values : Array[Json]
+  const_value : Json?
   ref_name : String?
   items : Schema?
   minimum : Double?

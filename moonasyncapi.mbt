@@ -65,6 +65,8 @@ pub struct Schema {
   required : Array[String]
   properties : Map[String, Schema]
   enum_values : Array[String]
+  enum_json_values : Array[Json]
+  const_value : Json?
   ref_name : String?
   items : Schema?
   minimum : Double?
@@ -1382,9 +1384,11 @@ fn parse_schema(value : Json) -> Schema {
         _ => ()
       }
       let enum_values : Array[String] = []
+      let enum_json_values : Array[Json] = []
       match object.get("enum") {
         Some(Array(values)) =>
           for item in values {
+            enum_json_values.push(item)
             match item {
               String(value) => enum_values.push(value)
               _ => ()
@@ -1392,6 +1396,7 @@ fn parse_schema(value : Json) -> Schema {
           }
         _ => ()
       }
+      let const_value = object.get("const")
       let items = match object.get("items") {
         Some(value) => Some(parse_schema(value))
         None => None
@@ -1418,6 +1423,8 @@ fn parse_schema(value : Json) -> Schema {
         required,
         properties,
         enum_values,
+        enum_json_values,
+        const_value,
         ref_name,
         items,
         minimum,
@@ -1440,6 +1447,8 @@ fn parse_schema(value : Json) -> Schema {
         required: [],
         properties: Map([]),
         enum_values: [],
+        enum_json_values: [],
+        const_value: None,
         ref_name: None,
         items: None,
         minimum: None,
@@ -1915,22 +1924,40 @@ fn validate_json_schema(
       }
     None => ()
   }
-  match schema.kind {
+  let type_matches = match schema.kind {
     Some(kind) => {
       let actual = json_kind(value)
-      let matches = if kind == "integer" {
+      if kind == "integer" {
         json_is_integer(value)
       } else {
         kind == actual
       }
-      if !matches {
+    }
+    None => true
+  }
+  if !type_matches {
+    issues.push(
+      error(
+        "payload.type.mismatch", path, "payload type does not match schema type",
+      ),
+    )
+    return
+  }
+  if schema.enum_json_values.length() > 0 &&
+    !contains_json(schema.enum_json_values, value) {
+    issues.push(
+      error("payload.enum.invalid", path, "payload value is not in enum"),
+    )
+  }
+  match schema.const_value {
+    Some(expected) =>
+      if expected != value {
         issues.push(
           error(
-            "payload.type.mismatch", path, "payload type does not match schema type",
+            "payload.const.invalid", path, "payload value does not match const",
           ),
         )
       }
-    }
     None => ()
   }
   match value {
@@ -1998,12 +2025,6 @@ fn validate_json_schema(
             )
           }
         None => ()
-      }
-      if schema.enum_values.length() > 0 &&
-        !contains_string(schema.enum_values, text) {
-        issues.push(
-          error("payload.enum.invalid", path, "string value is not in enum"),
-        )
       }
     }
     Array(values) => {
@@ -2155,6 +2176,16 @@ fn contains_string(items : Array[String], value : String) -> Bool {
 }
 
 ///|
+fn contains_json(items : Array[Json], value : Json) -> Bool {
+  for item in items {
+    if item == value {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn compare_schema_compatibility(
   before : Schema,
   after : Schema,
@@ -2245,17 +2276,41 @@ fn compare_schema_compatibility(
       ),
     )
   }
-  for old_value in before.enum_values {
-    if after.enum_values.length() > 0 &&
-      !contains_string(after.enum_values, old_value) {
+  for old_value in before.enum_json_values {
+    if after.enum_json_values.length() > 0 &&
+      !contains_json(after.enum_json_values, old_value) {
       issues.push(
         error(
           "compat.schema.enum.value.removed",
           path + ".enum",
-          "enum value was removed: " + old_value,
+          "an enum value was removed",
         ),
       )
     }
+  }
+  match after.const_value {
+    Some(new_value) =>
+      match before.const_value {
+        Some(old_value) =>
+          if old_value != new_value {
+            issues.push(
+              error(
+                "compat.schema.const.changed",
+                path + ".const",
+                "const value changed",
+              ),
+            )
+          }
+        None =>
+          issues.push(
+            error(
+              "compat.schema.const.added",
+              path + ".const",
+              "const constraint was introduced",
+            ),
+          )
+      }
+    None => ()
   }
   for required_name in after.required {
     if !contains_string(before.required, required_name) {

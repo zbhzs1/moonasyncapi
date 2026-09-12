@@ -350,6 +350,52 @@ test "reports server compatibility changes" {
 }
 
 ///|
+test "validates boolean number and null enum values" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Enums\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"enum\":[true,42,null]}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  inspect(validate_payload(message, @json.parse("true")).length(), content="0")
+  inspect(validate_payload(message, @json.parse("42")).length(), content="0")
+  inspect(validate_payload(message, @json.parse("null")).length(), content="0")
+  inspect(validate_payload(message, @json.parse("false")).length(), content="1")
+}
+
+///|
+test "validates const payload values" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Const\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"string\",\"const\":\"created\"}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  inspect(
+    validate_payload(message, @json.parse("\"created\"")).length(),
+    content="0",
+  )
+  inspect(
+    validate_payload(message, @json.parse("\"deleted\"")).length(),
+    content="1",
+  )
+}
+
+///|
+test "reports enum and const compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{},\"components\":{\"schemas\":{\"Flag\":{\"enum\":[true,false]}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{},\"components\":{\"schemas\":{\"Flag\":{\"enum\":[true],\"const\":true}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="compat.schema.enum.value.removed")
+  inspect(issues[1].code, content="compat.schema.const.added")
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",
