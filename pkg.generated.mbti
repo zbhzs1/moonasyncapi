@@ -6,7 +6,11 @@ import {
 }
 
 // Values
+pub fn diagnostics_by_severity(Array[Diagnostic], String) -> Array[Diagnostic]
+
 pub fn diagnostics_count(Array[Diagnostic], String) -> Int
+
+pub fn diagnostics_exit_code(Array[Diagnostic], warnings_as_errors? : Bool) -> Int
 
 pub fn diagnostics_has_errors(Array[Diagnostic]) -> Bool
 
@@ -14,7 +18,21 @@ pub fn diagnostics_to_text(Array[Diagnostic]) -> String
 
 pub fn diff(AsyncApiDocument, AsyncApiDocument) -> Array[Diagnostic]
 
+pub fn document_summary(AsyncApiDocument) -> String
+
+pub fn find_channel(AsyncApiDocument, String) -> AsyncApiChannel?
+
+pub fn find_message(AsyncApiDocument, String) -> AsyncApiMessage?
+
+pub fn find_operation(AsyncApiDocument, String) -> AsyncApiOperation?
+
+pub fn find_schema(AsyncApiDocument, String) -> Schema?
+
+pub fn highest_severity(Array[Diagnostic]) -> String
+
 pub fn parse(String) -> Result[AsyncApiDocument, String]
+
+pub fn summarize_diagnostics(Array[Diagnostic]) -> DiagnosticSummary
 
 pub fn validate(AsyncApiDocument) -> Array[Diagnostic]
 
@@ -63,6 +81,13 @@ pub struct Diagnostic {
   message : String
 } derive(Eq, @debug.Debug)
 
+pub struct DiagnosticSummary {
+  errors : Int
+  warnings : Int
+  infos : Int
+  total : Int
+} derive(Eq, @debug.Debug)
+
 pub struct Schema {
   kind : String?
   required : Array[String]
@@ -72,6 +97,16 @@ pub struct Schema {
   items : Schema?
   minimum : Double?
   maximum : Double?
+  exclusive_minimum : Double?
+  exclusive_maximum : Double?
+  min_length : Double?
+  max_length : Double?
+  min_items : Double?
+  max_items : Double?
+  unique_items : Bool
+  min_properties : Double?
+  max_properties : Double?
+  unsupported_keywords : Array[String]
 } derive(Eq, @debug.Debug)
 
 // Type aliases

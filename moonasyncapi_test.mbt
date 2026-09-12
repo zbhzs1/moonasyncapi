@@ -203,6 +203,34 @@ test "validates reusable component messages" {
 }
 
 ///|
+test "summarizes and filters diagnostics for CI consumers" {
+  let document = parse(
+    "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  let summary = summarize_diagnostics(issues)
+  inspect(summary.errors, content="1")
+  inspect(summary.warnings, content="1")
+  inspect(summary.infos, content="0")
+  inspect(summary.total, content="2")
+  inspect(diagnostics_by_severity(issues, "error").length(), content="1")
+  inspect(highest_severity(issues), content="error")
+  inspect(diagnostics_exit_code(issues), content="1")
+}
+
+///|
+test "supports strict warning exit codes" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Warnings\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(highest_severity(issues), content="warning")
+  inspect(diagnostics_exit_code(issues), content="0")
+  inspect(diagnostics_exit_code(issues, warnings_as_errors=true), content="1")
+  inspect(highest_severity([]), content="none")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",

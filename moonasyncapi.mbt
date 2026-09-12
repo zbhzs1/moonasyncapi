@@ -69,6 +69,14 @@ pub struct Diagnostic {
 } derive(Eq, Debug)
 
 ///|
+pub struct DiagnosticSummary {
+  errors : Int
+  warnings : Int
+  infos : Int
+  total : Int
+} derive(Eq, Debug)
+
+///|
 pub fn parse(input : String) -> Result[AsyncApiDocument, String] {
   let value = @json.parse(input) catch {
     _ => return Err("invalid JSON".to_string())
@@ -123,6 +131,77 @@ pub fn document_summary(document : AsyncApiDocument) -> String {
   " messages, " +
   document.schemas.length().to_string() +
   " schemas"
+}
+
+///|
+/// Count diagnostics by severity for CI and command-line consumers.
+pub fn summarize_diagnostics(issues : Array[Diagnostic]) -> DiagnosticSummary {
+  let mut errors = 0
+  let mut warnings = 0
+  let mut infos = 0
+  for issue in issues {
+    if issue.severity == "error" {
+      errors += 1
+    } else if issue.severity == "warning" {
+      warnings += 1
+    } else {
+      infos += 1
+    }
+  }
+  { errors, warnings, infos, total: issues.length() }
+}
+
+///|
+/// Keep only diagnostics with the requested severity.
+pub fn diagnostics_by_severity(
+  issues : Array[Diagnostic],
+  severity : String,
+) -> Array[Diagnostic] {
+  let result : Array[Diagnostic] = []
+  for issue in issues {
+    if issue.severity == severity {
+      result.push(issue)
+    }
+  }
+  result
+}
+
+///|
+/// Return the most severe level present, or `none` for an empty list.
+pub fn highest_severity(issues : Array[Diagnostic]) -> String {
+  let mut has_warning = false
+  let mut has_info = false
+  for issue in issues {
+    if issue.severity == "error" {
+      return "error"
+    }
+    if issue.severity == "warning" {
+      has_warning = true
+    } else {
+      has_info = true
+    }
+  }
+  if has_warning {
+    "warning"
+  } else if has_info {
+    "info"
+  } else {
+    "none"
+  }
+}
+
+///|
+/// Recommend a conventional process exit code for the diagnostic set.
+pub fn diagnostics_exit_code(
+  issues : Array[Diagnostic],
+  warnings_as_errors? : Bool = false,
+) -> Int {
+  let summary = summarize_diagnostics(issues)
+  if summary.errors > 0 || (warnings_as_errors && summary.warnings > 0) {
+    1
+  } else {
+    0
+  }
 }
 
 ///|
