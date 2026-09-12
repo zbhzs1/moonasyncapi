@@ -30,6 +30,17 @@ test "reports invalid operation references" {
 }
 
 ///|
+test "warns when operation protocol disagrees with channel binding" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Protocols\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}}}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"protocol\":\"kafka\"}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="operation.protocol.mismatch")
+  inspect(issues[1].code, content="operation.messages.empty")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",

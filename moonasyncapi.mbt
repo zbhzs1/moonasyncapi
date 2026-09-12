@@ -142,6 +142,27 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
         ),
       )
     }
+    match operation.protocol {
+      Some(protocol) =>
+        match document.channels.get(operation.channel) {
+          Some(channel) =>
+            match channel.binding {
+              Some(binding) =>
+                if protocol != binding {
+                  issues.push(
+                    warning(
+                      "operation.protocol.mismatch",
+                      path + ".protocol",
+                      "operation protocol does not match channel binding",
+                    ),
+                  )
+                }
+              None => ()
+            }
+          None => ()
+        }
+      None => ()
+    }
     for message_name in operation.messages {
       match document.channels.get(operation.channel) {
         Some(channel) =>
@@ -606,7 +627,11 @@ fn parse_operations(raw : Map[String, Json]) -> Array[AsyncApiOperation] {
             }
           _ => ()
         }
-        result.push({ name, action, channel, messages, protocol: None })
+        let protocol = match object.get("protocol") {
+          Some(String(value)) => Some(value)
+          _ => None
+        }
+        result.push({ name, action, channel, messages, protocol })
       }
       _ =>
         result.push({
