@@ -260,6 +260,18 @@ pub fn diff(
       )
     }
   }
+  for name, old_schema in before.schemas {
+    match after.schemas.get(name) {
+      Some(new_schema) =>
+        compare_schema_compatibility(
+          old_schema,
+          new_schema,
+          "$.components.schemas." + name,
+          issues,
+        )
+      None => ()
+    }
+  }
   for old_operation in before.operations {
     match find_operation(after.operations, old_operation.name) {
       None =>
@@ -1050,6 +1062,93 @@ fn contains_string(items : Array[String], value : String) -> Bool {
     }
   }
   false
+}
+
+///|
+fn compare_schema_compatibility(
+  before : Schema,
+  after : Schema,
+  path : String,
+  issues : Array[Diagnostic],
+) -> Unit {
+  if before.kind != after.kind {
+    issues.push(
+      error("compat.schema.type.changed", path + ".type", "schema type changed"),
+    )
+  }
+  for required_name in after.required {
+    if !contains_string(before.required, required_name) {
+      issues.push(
+        error(
+          "compat.schema.required.added",
+          path + ".required",
+          "required field was added: " + required_name,
+        ),
+      )
+    }
+  }
+  for name, _ in before.properties {
+    if after.properties.get(name) is None {
+      issues.push(
+        error(
+          "compat.schema.property.removed",
+          path + ".properties." + name,
+          "schema property was removed",
+        ),
+      )
+    }
+  }
+  for name, new_property in after.properties {
+    match before.properties.get(name) {
+      None =>
+        issues.push(
+          info(
+            "compat.schema.property.added",
+            path + ".properties." + name,
+            "schema property was added",
+          ),
+        )
+      Some(old_property) =>
+        compare_schema_compatibility(
+          old_property,
+          new_property,
+          path + ".properties." + name,
+          issues,
+        )
+    }
+  }
+  match before.items {
+    Some(old_items) =>
+      match after.items {
+        Some(new_items) =>
+          compare_schema_compatibility(
+            old_items,
+            new_items,
+            path + ".items",
+            issues,
+          )
+        None =>
+          issues.push(
+            error(
+              "compat.schema.items.removed",
+              path + ".items",
+              "array item schema was removed",
+            ),
+          )
+      }
+    None =>
+      match after.items {
+        Some(_) =>
+          issues.push(
+            info(
+              "compat.schema.items.added",
+              path + ".items",
+              "array item schema was added",
+            ),
+          )
+        None => ()
+      }
+  }
 }
 
 ///|

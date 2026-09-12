@@ -97,6 +97,21 @@ test "diagnoses unsupported schema keywords" {
 }
 
 ///|
+test "reports breaking schema compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{},\"components\":{\"schemas\":{\"Event\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}}}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{},\"components\":{\"schemas\":{\"Event\":{\"type\":\"object\",\"required\":[\"id\"],\"properties\":{\"id\":{\"type\":\"number\"},\"name\":{\"type\":\"string\"}}}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="3")
+  inspect(issues[0].code, content="compat.schema.required.added")
+  inspect(issues[1].code, content="compat.schema.type.changed")
+  inspect(issues[2].code, content="compat.schema.property.added")
+}
+
+///|
 test "reports unsupported bindings and invalid version" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Legacy\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"nats\":{}}}}}",
