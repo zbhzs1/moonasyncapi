@@ -301,6 +301,28 @@ pub fn diff(
             ),
           )
         }
+        for old_message in old_operation.messages {
+          if !contains_string(new_operation.messages, old_message) {
+            issues.push(
+              error(
+                "compat.operation.message.removed",
+                "$.operations." + old_operation.name + ".messages",
+                "operation message was removed: " + old_message,
+              ),
+            )
+          }
+        }
+        for new_message in new_operation.messages {
+          if !contains_string(old_operation.messages, new_message) {
+            issues.push(
+              info(
+                "compat.operation.message.added",
+                "$.operations." + old_operation.name + ".messages",
+                "operation message was added: " + new_message,
+              ),
+            )
+          }
+        }
       }
     }
   }

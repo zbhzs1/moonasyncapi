@@ -112,6 +112,20 @@ test "reports breaking schema compatibility changes" {
 }
 
 ///|
+test "reports operation message compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"string\"}},\"deleted\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"events\":{\"action\":\"receive\",\"channel\":\"events\",\"messages\":[\"created\"]}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"string\"}},\"deleted\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"events\":{\"action\":\"receive\",\"channel\":\"events\",\"messages\":[\"deleted\"]}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="compat.operation.message.removed")
+  inspect(issues[1].code, content="compat.operation.message.added")
+}
+
+///|
 test "reports unsupported bindings and invalid version" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Legacy\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"nats\":{}}}}}",
