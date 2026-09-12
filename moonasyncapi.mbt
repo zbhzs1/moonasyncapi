@@ -48,6 +48,8 @@ pub struct Schema {
   items : Schema?
   minimum : Double?
   maximum : Double?
+  min_length : Double?
+  max_length : Double?
 } derive(Eq, Debug)
 
 ///|
@@ -658,6 +660,8 @@ fn parse_schema(value : Json) -> Schema {
       }
       let minimum = number_field(object, "minimum")
       let maximum = number_field(object, "maximum")
+      let min_length = number_field(object, "minLength")
+      let max_length = number_field(object, "maxLength")
       {
         kind,
         required,
@@ -667,6 +671,8 @@ fn parse_schema(value : Json) -> Schema {
         items,
         minimum,
         maximum,
+        min_length,
+        max_length,
       }
     }
     _ =>
@@ -679,6 +685,8 @@ fn parse_schema(value : Json) -> Schema {
         items: None,
         minimum: None,
         maximum: None,
+        min_length: None,
+        max_length: None,
       }
   }
 }
@@ -708,7 +716,7 @@ fn resolve_schema(schema : Schema, schemas : Map[String, Schema]) -> Schema {
     Some(item) => Some(resolve_schema(item, schemas))
     None => None
   }
-  { ..resolved, properties, items }
+  { ..resolved, properties, items, ref_name: schema.ref_name }
 }
 
 ///|
@@ -723,16 +731,23 @@ fn validate_message(
     )
   }
   match message.payload {
-    Some(schema) =>
+    Some(schema) => {
+      if schema.ref_name is None {
+        validate_schema_definition(schema, path + ".payload", issues)
+      }
       match schema.ref_name {
         Some(reference) =>
-          issues.push(
-            error(
-              "schema.ref.missing",
-              path + ".payload.$ref",
-              "local schema reference could not be resolved: " + reference,
-            ),
-          )
+          if schema.kind is None &&
+            schema.properties.is_empty() &&
+            schema.items is None {
+            issues.push(
+              error(
+                "schema.ref.missing",
+                path + ".payload.$ref",
+                "local schema reference could not be resolved: " + reference,
+              ),
+            )
+          }
         None =>
           if schema.kind is None && schema.properties.is_empty() {
             issues.push(
@@ -744,6 +759,7 @@ fn validate_message(
             )
           }
       }
+    }
     None =>
       issues.push(
         warning(
@@ -789,11 +805,55 @@ fn validate_schema_definition(
       }
     None => ()
   }
+  match schema.min_length {
+    Some(minimum) =>
+      match schema.max_length {
+        Some(maximum) =>
+          if minimum > maximum {
+            issues.push(
+              error(
+                "schema.length.invalid", path, "schema minLength must not exceed maxLength",
+              ),
+            )
+          }
+        None => ()
+      }
+    None => ()
+  }
   for name, property in schema.properties {
-    validate_schema_definition(property, path + ".properties." + name, issues)
+    if property.ref_name is None {
+      validate_schema_definition(property, path + ".properties." + name, issues)
+    }
+  }
+  for required_name in schema.required {
+    if schema.properties.get(required_name) is None {
+      issues.push(
+        warning(
+          "schema.required.unknown",
+          path + ".required",
+          "required field is not declared in properties: " + required_name,
+        ),
+      )
+    }
+  }
+  match schema.kind {
+    Some(kind) =>
+      if kind == "array" && schema.items is None {
+        issues.push(
+          warning(
+            "schema.items.missing",
+            path + ".items",
+            "array schema does not declare items",
+          ),
+        )
+      }
+    None => ()
   }
   match schema.items {
-    Some(items) => validate_schema_definition(items, path + ".items", issues)
+    Some(items) =>
+      if items.ref_name is None {
+        validate_schema_definition(items, path + ".items", issues)
+      }
     None => ()
   }
 }
@@ -818,13 +878,17 @@ fn validate_json_schema(
 ) -> Unit {
   match schema.ref_name {
     Some(reference) =>
-      issues.push(
-        error(
-          "schema.ref.missing",
-          path + ".$ref",
-          "local schema reference could not be resolved: " + reference,
-        ),
-      )
+      if schema.kind is None &&
+        schema.properties.is_empty() &&
+        schema.items is None {
+        issues.push(
+          error(
+            "schema.ref.missing",
+            path + ".$ref",
+            "local schema reference could not be resolved: " + reference,
+          ),
+        )
+      }
     None => ()
   }
   match schema.kind {
@@ -861,13 +925,36 @@ fn validate_json_schema(
         }
       }
     }
-    String(text) =>
+    String(text) => {
+      match schema.min_length {
+        Some(limit) =>
+          if text.length().to_double() < limit {
+            issues.push(
+              error(
+                "payload.string.min_length", path, "string is shorter than minLength",
+              ),
+            )
+          }
+        None => ()
+      }
+      match schema.max_length {
+        Some(limit) =>
+          if text.length().to_double() > limit {
+            issues.push(
+              error(
+                "payload.string.max_length", path, "string is longer than maxLength",
+              ),
+            )
+          }
+        None => ()
+      }
       if schema.enum_values.length() > 0 &&
         !contains_string(schema.enum_values, text) {
         issues.push(
           error("payload.enum.invalid", path, "string value is not in enum"),
         )
       }
+    }
     Array(values) =>
       match schema.items {
         Some(item_schema) =>

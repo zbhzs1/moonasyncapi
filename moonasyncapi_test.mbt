@@ -32,7 +32,7 @@ test "reports invalid operation references" {
 ///|
 test "validates a message payload against its schema" {
   let document = parse(
-    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"]}}}}}}",
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",
   ).unwrap()
   let channel = document.channels.get("events").unwrap()
   let message = channel.messages.get("event").unwrap()
@@ -61,6 +61,28 @@ test "reports payload type and enum violations" {
   )
   inspect(enum_issues.length(), content="1")
   inspect(enum_issues[0].code, content="payload.enum.invalid")
+}
+
+///|
+test "validates string length constraints" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Names\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"string\",\"minLength\":3,\"maxLength\":5}}}}}}",
+  ).unwrap()
+  let message = document.channels.get("events").unwrap().messages
+    .get("event")
+    .unwrap()
+  inspect(
+    validate_payload(message, @json.parse("\"hi\"")).length(),
+    content="1",
+  )
+  inspect(
+    validate_payload(message, @json.parse("\"hello\"")).length(),
+    content="0",
+  )
+  inspect(
+    validate_payload(message, @json.parse("\"toolong\"")).length(),
+    content="1",
+  )
 }
 
 ///|
@@ -180,6 +202,17 @@ test "validates payloads through an operation" {
     @json.parse("{\"id\":\"1\"}"),
   )
   inspect(diagnostics_has_errors(valid), content="false")
+}
+
+///|
+test "diagnoses incomplete object and array schemas" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Incomplete schemas\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"]}}}}},\"components\":{\"schemas\":{\"Items\":{\"type\":\"array\"}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="schema.required.unknown")
+  inspect(issues[1].code, content="schema.items.missing")
 }
 
 ///|
