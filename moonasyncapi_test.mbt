@@ -192,6 +192,17 @@ test "reports tightened schema constraints" {
 }
 
 ///|
+test "validates reusable component messages" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Components\"},\"channels\":{\"events\":{\"address\":\"events\"}},\"components\":{\"messages\":{\"Invalid\":{\"contentType\":\"json\"}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="message.content_type.invalid")
+  inspect(issues[1].code, content="message.payload.missing")
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",
@@ -420,7 +431,7 @@ test "diagnoses incomplete object and array schemas" {
 ///|
 test "accepts an operation that references a component message" {
   let document = parse(
-    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Orders\"},\"channels\":{\"orders\":{\"address\":\"orders\"}},\"operations\":{\"receiveOrders\":{\"action\":\"receive\",\"channel\":{\"$ref\":\"#/channels/orders\"},\"messages\":[{\"$ref\":\"#/components/messages/OrderCreated\"}]}},\"components\":{\"messages\":{\"OrderCreated\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"]}}}}}",
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Orders\"},\"channels\":{\"orders\":{\"address\":\"orders\"}},\"operations\":{\"receiveOrders\":{\"action\":\"receive\",\"channel\":{\"$ref\":\"#/channels/orders\"},\"messages\":[{\"$ref\":\"#/components/messages/OrderCreated\"}]}},\"components\":{\"messages\":{\"OrderCreated\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"],\"properties\":{\"id\":{\"type\":\"string\"}}}}}}}",
   ).unwrap()
   inspect(document.messages.length(), content="1")
   inspect(validate(document).length(), content="0")

@@ -185,6 +185,9 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
   for name, schema in document.schemas {
     validate_schema_definition(schema, "$.components.schemas." + name, issues)
   }
+  for name, message in document.messages {
+    validate_message(message, "$.components.messages." + name, issues)
+  }
   for operation in document.operations {
     let path = "$.operations." + operation.name
     if operation.action != "send" && operation.action != "receive" {
@@ -892,6 +895,19 @@ fn validate_message(
     issues.push(
       warning("message.title.missing", path + ".title", "message has no title"),
     )
+  }
+  match message.content_type {
+    Some(content_type) =>
+      if content_type.length() == 0 || !content_type.contains("/") {
+        issues.push(
+          warning(
+            "message.content_type.invalid",
+            path + ".contentType",
+            "contentType should use a type/subtype media type",
+          ),
+        )
+      }
+    None => ()
   }
   match message.payload {
     Some(schema) => {
