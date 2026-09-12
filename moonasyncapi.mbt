@@ -70,6 +70,55 @@ pub fn parse(input : String) -> Result[AsyncApiDocument, String] {
 }
 
 ///|
+/// Find a channel by its document key.
+pub fn find_channel(
+  document : AsyncApiDocument,
+  name : String,
+) -> AsyncApiChannel? {
+  document.channels.get(name)
+}
+
+///|
+/// Find a reusable component schema by name.
+pub fn find_schema(document : AsyncApiDocument, name : String) -> Schema? {
+  document.schemas.get(name)
+}
+
+///|
+/// Find a reusable component message by name.
+pub fn find_message(
+  document : AsyncApiDocument,
+  name : String,
+) -> AsyncApiMessage? {
+  document.messages.get(name)
+}
+
+///|
+/// Find an operation by its document key.
+pub fn find_operation(
+  document : AsyncApiDocument,
+  name : String,
+) -> AsyncApiOperation? {
+  find_operation_in(document.operations, name)
+}
+
+///|
+/// Return a compact inventory of the parsed contract.
+pub fn document_summary(document : AsyncApiDocument) -> String {
+  "AsyncAPI " +
+  document.version +
+  ": " +
+  document.channels.length().to_string() +
+  " channels, " +
+  document.operations.length().to_string() +
+  " operations, " +
+  document.messages.length().to_string() +
+  " messages, " +
+  document.schemas.length().to_string() +
+  " schemas"
+}
+
+///|
 pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
   let issues : Array[Diagnostic] = []
   if document.asyncapi != "3.0.0" {
@@ -305,7 +354,7 @@ pub fn diff(
     }
   }
   for old_operation in before.operations {
-    match find_operation(after.operations, old_operation.name) {
+    match find_operation_in(after.operations, old_operation.name) {
       None =>
         issues.push(
           error(
@@ -359,7 +408,7 @@ pub fn diff(
     }
   }
   for new_operation in after.operations {
-    if find_operation(before.operations, new_operation.name) is None {
+    if find_operation_in(before.operations, new_operation.name) is None {
       issues.push(
         info(
           "compat.operation.added",
@@ -419,7 +468,7 @@ pub fn validate_operation_payload(
   payload : Json,
 ) -> Array[Diagnostic] {
   let issues : Array[Diagnostic] = []
-  let operation = match find_operation(document.operations, operation_name) {
+  let operation = match find_operation_in(document.operations, operation_name) {
     Some(value) => value
     None => {
       issues.push(
@@ -1210,7 +1259,7 @@ fn compare_schema_compatibility(
 }
 
 ///|
-fn find_operation(
+fn find_operation_in(
   operations : Array[AsyncApiOperation],
   name : String,
 ) -> AsyncApiOperation? {

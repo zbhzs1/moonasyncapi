@@ -51,6 +51,22 @@ test "warns about duplicate operation messages" {
 }
 
 ///|
+test "exposes parsed contract lookup APIs" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Lookup\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"messages\":[\"created\"]}},\"components\":{\"schemas\":{\"Id\":{\"type\":\"string\"}},\"messages\":{\"Shared\":{\"payload\":{\"type\":\"string\"}}}}}",
+  ).unwrap()
+  inspect(find_channel(document, "events") is Some(_), content="true")
+  inspect(find_channel(document, "missing") is None, content="true")
+  inspect(find_schema(document, "Id") is Some(_), content="true")
+  inspect(find_message(document, "Shared") is Some(_), content="true")
+  inspect(find_operation(document, "receive") is Some(_), content="true")
+  inspect(
+    document_summary(document),
+    content="AsyncAPI 3.0.0: 1 channels, 1 operations, 1 messages, 1 schemas",
+  )
+}
+
+///|
 test "validates a message payload against its schema" {
   let document = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Payloads\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"mqtt\":{}},\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}}}}",
