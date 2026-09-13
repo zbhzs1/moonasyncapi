@@ -106,6 +106,7 @@ pub struct Schema {
   unique_items : Bool
   min_properties : Double?
   max_properties : Double?
+  additional_properties : Bool?
   unsupported_keywords : Array[String]
 } derive(Eq, Debug)
 
@@ -2003,6 +2004,9 @@ fn parse_schema(value : Json) -> Schema {
       let unique_items = bool_field(object, "uniqueItems", false)
       let min_properties = number_field(object, "minProperties")
       let max_properties = number_field(object, "maxProperties")
+      let additional_properties = bool_option_field(
+        object, "additionalProperties",
+      )
       let unsupported_keywords : Array[String] = []
       for key, _ in object {
         if is_unsupported_schema_keyword(key) {
@@ -2032,6 +2036,7 @@ fn parse_schema(value : Json) -> Schema {
         unique_items,
         min_properties,
         max_properties,
+        additional_properties,
         unsupported_keywords,
       }
     }
@@ -2059,6 +2064,7 @@ fn parse_schema(value : Json) -> Schema {
         unique_items: false,
         min_properties: None,
         max_properties: None,
+        additional_properties: None,
         unsupported_keywords: [],
       }
   }
@@ -2436,8 +2442,7 @@ fn is_unsupported_schema_keyword(keyword : String) -> Bool {
   keyword == "oneOf" ||
   keyword == "not" ||
   keyword == "pattern" ||
-  keyword == "format" ||
-  keyword == "additionalProperties"
+  keyword == "format"
 }
 
 ///|
@@ -2668,6 +2673,21 @@ fn validate_json_schema(
   }
   match value {
     Object(object) => {
+      match schema.additional_properties {
+        Some(false) =>
+          for name, _ in object {
+            if schema.properties.get(name) is None {
+              issues.push(
+                error(
+                  "payload.object.additional_property",
+                  path + "." + name,
+                  "object contains an undeclared property",
+                ),
+              )
+            }
+          }
+        _ => ()
+      }
       match schema.min_properties {
         Some(limit) =>
           if object.length().to_double() < limit {
@@ -2973,6 +2993,26 @@ fn compare_schema_compatibility(
     "compat.schema.max_properties.tightened",
     issues,
   )
+  if before.additional_properties != after.additional_properties {
+    match after.additional_properties {
+      Some(false) =>
+        issues.push(
+          error(
+            "compat.schema.additional_properties.disabled",
+            path + ".additionalProperties",
+            "additionalProperties was disabled",
+          ),
+        )
+      _ =>
+        issues.push(
+          info(
+            "compat.schema.additional_properties.changed",
+            path + ".additionalProperties",
+            "additionalProperties policy changed",
+          ),
+        )
+    }
+  }
   if !before.unique_items && after.unique_items {
     issues.push(
       error(
@@ -3258,6 +3298,15 @@ fn bool_field(
     Some(True) => true
     Some(False) => false
     _ => fallback
+  }
+}
+
+///|
+fn bool_option_field(object : Map[String, Json], name : String) -> Bool? {
+  match object.get(name) {
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    _ => None
   }
 }
 

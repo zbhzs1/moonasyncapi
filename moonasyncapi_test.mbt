@@ -589,6 +589,40 @@ test "diagnoses cyclic schema references without recursing forever" {
 }
 
 ///|
+test "rejects undeclared object properties when schema is closed" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Closed\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"integer\"}}}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  inspect(
+    validate_payload(message, @json.parse("{\"id\":1}")).length(),
+    content="0",
+  )
+  inspect(
+    validate_payload(message, @json.parse("{\"id\":1,\"extra\":true}")).length(),
+    content="1",
+  )
+}
+
+///|
+test "reports closing an object schema as breaking" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{},\"components\":{\"schemas\":{\"Event\":{\"type\":\"object\"}}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{},\"components\":{\"schemas\":{\"Event\":{\"type\":\"object\",\"additionalProperties\":false}}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="1")
+  inspect(
+    issues[0].code,
+    content="compat.schema.additional_properties.disabled",
+  )
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",

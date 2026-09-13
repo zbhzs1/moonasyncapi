@@ -164,6 +164,7 @@ pub struct Schema {
   unique_items : Bool
   min_properties : Double?
   max_properties : Double?
+  additional_properties : Bool?
   unsupported_keywords : Array[String]
 } derive(Eq, @debug.Debug)
 
