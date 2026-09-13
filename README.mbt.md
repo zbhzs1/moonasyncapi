@@ -36,6 +36,7 @@ match @moonasyncapi.parse(source) {
 Add the package import to the consumer's `moon.pkg`:
 
 ```moonbit nocheck
+///|
 import {
   "zbhzs1/moonasyncapi",
 }

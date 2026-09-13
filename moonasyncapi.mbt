@@ -643,7 +643,7 @@ pub fn summarize_diagnostics(issues : Array[Diagnostic]) -> DiagnosticSummary {
       infos += 1
     }
   }
-  { errors, warnings, infos, total: issues.length() }
+  { errors, warnings, infos, total: issues.length(), }
 }
 
 ///|
@@ -904,7 +904,7 @@ pub fn validate_strict(document : AsyncApiDocument) -> Array[Diagnostic] {
   let issues = validate(document)
   for index, issue in issues {
     if issue.severity == "warning" {
-      issues[index] = { ..issue, severity: "error" }
+      issues[index] = { ..issue, severity: "error", }
     }
   }
   issues
@@ -2201,7 +2201,7 @@ fn parse_server_variables(
                 }
               _ => ()
             }
-            result[name] = { name, default_value, enum_values, description }
+            result[name] = { name, default_value, enum_values, description, }
           }
           _ =>
             result[name] = {
@@ -2298,7 +2298,7 @@ fn parse_channels(
           _ => ()
         }
         let parameters = parse_channel_parameters(object)
-        result[name] = { address, messages, binding, parameters }
+        result[name] = { address, messages, binding, parameters, }
       }
       _ =>
         result[name] = {
@@ -2452,7 +2452,7 @@ fn parse_message(
           optional_string_field(correlation, "location")
         _ => None
       }
-      { name, title, content_type, payload, headers, correlation_id_location }
+      { name, title, content_type, payload, headers, correlation_id_location, }
     }
     _ =>
       {
@@ -2624,7 +2624,7 @@ fn resolve_schema_with_seen(
       if reference.has_prefix(prefix) {
         let name = reference[prefix.length():reference.length()].to_owned()
         if seen.get(name) is Some(_) {
-          return { ..schema, ref_cycle: true }
+          return { ..schema, ref_cycle: true, }
         }
         match schemas.get(name) {
           Some(value) => {
@@ -2634,7 +2634,7 @@ fn resolve_schema_with_seen(
             }
             next_seen[name] = true
             let resolved = resolve_schema_with_seen(value, schemas, next_seen)
-            return { ..resolved, ref_name: schema.ref_name }
+            return { ..resolved, ref_name: schema.ref_name, }
           }
           None => ()
         }
@@ -3991,15 +3991,15 @@ fn bool_option_field(object : Map[String, Json], name : String) -> Bool? {
 
 ///|
 fn error(code : String, path : String, message : String) -> Diagnostic {
-  { severity: "error", code, path, message }
+  { severity: "error", code, path, message, }
 }
 
 ///|
 fn warning(code : String, path : String, message : String) -> Diagnostic {
-  { severity: "warning", code, path, message }
+  { severity: "warning", code, path, message, }
 }
 
 ///|
 fn info(code : String, path : String, message : String) -> Diagnostic {
-  { severity: "info", code, path, message }
+  { severity: "info", code, path, message, }
 }
