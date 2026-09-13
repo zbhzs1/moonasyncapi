@@ -155,6 +155,7 @@ pub struct Schema {
   items : Schema?
   minimum : Double?
   maximum : Double?
+  multiple_of : Double?
   exclusive_minimum : Double?
   exclusive_maximum : Double?
   min_length : Double?

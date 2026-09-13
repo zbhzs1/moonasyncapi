@@ -623,6 +623,28 @@ test "reports closing an object schema as breaking" {
 }
 
 ///|
+test "validates numeric multipleOf constraints" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Multiples\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"score\":{\"payload\":{\"type\":\"number\",\"multipleOf\":0.25}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("score")
+    .unwrap()
+  inspect(validate_payload(message, @json.parse("1.25")).length(), content="0")
+  inspect(validate_payload(message, @json.parse("1.3")).length(), content="1")
+}
+
+///|
+test "diagnoses invalid multipleOf values" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Multiples\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"score\":{\"payload\":{\"type\":\"number\",\"multipleOf\":0}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="schema.multiple_of.invalid")
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",

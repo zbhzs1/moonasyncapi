@@ -97,6 +97,7 @@ pub struct Schema {
   items : Schema?
   minimum : Double?
   maximum : Double?
+  multiple_of : Double?
   exclusive_minimum : Double?
   exclusive_maximum : Double?
   min_length : Double?
@@ -1995,6 +1996,7 @@ fn parse_schema(value : Json) -> Schema {
       }
       let minimum = number_field(object, "minimum")
       let maximum = number_field(object, "maximum")
+      let multiple_of = number_field(object, "multipleOf")
       let exclusive_minimum = number_field(object, "exclusiveMinimum")
       let exclusive_maximum = number_field(object, "exclusiveMaximum")
       let min_length = number_field(object, "minLength")
@@ -2027,6 +2029,7 @@ fn parse_schema(value : Json) -> Schema {
         items,
         minimum,
         maximum,
+        multiple_of,
         exclusive_minimum,
         exclusive_maximum,
         min_length,
@@ -2055,6 +2058,7 @@ fn parse_schema(value : Json) -> Schema {
         items: None,
         minimum: None,
         maximum: None,
+        multiple_of: None,
         exclusive_minimum: None,
         exclusive_maximum: None,
         min_length: None,
@@ -2259,6 +2263,19 @@ fn validate_schema_definition(
             )
           }
         None => ()
+      }
+    None => ()
+  }
+  match schema.multiple_of {
+    Some(value) =>
+      if value <= 0 {
+        issues.push(
+          error(
+            "schema.multiple_of.invalid",
+            path + ".multipleOf",
+            "multipleOf must be greater than zero",
+          ),
+        )
       }
     None => ()
   }
@@ -2840,6 +2857,17 @@ fn validate_json_schema(
           }
         None => ()
       }
+      match schema.multiple_of {
+        Some(divisor) =>
+          if divisor > 0 && !is_multiple_of(number, divisor) {
+            issues.push(
+              error(
+                "payload.number.multiple_of", path, "number is not a multiple of multipleOf",
+              ),
+            )
+          }
+        None => ()
+      }
     }
     _ => ()
   }
@@ -2935,6 +2963,13 @@ fn compare_schema_compatibility(
     after.maximum,
     path + ".maximum",
     "compat.schema.maximum.tightened",
+    issues,
+  )
+  compare_lower_bound(
+    before.multiple_of,
+    after.multiple_of,
+    path + ".multipleOf",
+    "compat.schema.multiple_of.tightened",
     issues,
   )
   compare_lower_bound(
@@ -3186,6 +3221,14 @@ fn compare_upper_bound(
       }
     None => ()
   }
+}
+
+///|
+fn is_multiple_of(value : Double, divisor : Double) -> Bool {
+  let quotient = value / divisor
+  let nearest = quotient.round()
+  let difference = quotient - nearest
+  difference < 0.0000001 && difference > -0.0000001
 }
 
 ///|
