@@ -8,7 +8,8 @@ The current release implements local references, server/channel/message extracti
 address parameter checks, a documented JSON Schema subset, MQTT/Kafka/AMQP binding-name
 recognition, descriptive security scheme parsing, payload validation, and stable
 compatibility diagnostics. Batch operation reports are available for CI consumers.
-See
+Strict validation, schema inspection, and human-readable validation reports are also
+available for tooling. See
 `docs/SUPPORT_MATRIX.md` for the exact boundary.
 
 ## Verification

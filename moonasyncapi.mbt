@@ -139,6 +139,18 @@ pub struct OperationValidationReport {
 } derive(Eq, Debug)
 
 ///|
+pub struct SchemaSummary {
+  kind : String?
+  property_count : Int
+  required_count : Int
+  enum_count : Int
+  has_items : Bool
+  has_default : Bool
+  example_count : Int
+  has_constraints : Bool
+} derive(Eq, Debug)
+
+///|
 pub fn parse(input : String) -> Result[AsyncApiDocument, String] {
   let value = @json.parse(input) catch {
     _ => return Err("invalid JSON".to_string())
@@ -280,6 +292,38 @@ pub fn find_security_scheme(
   name : String,
 ) -> SecurityScheme? {
   document.security_schemes.get(name)
+}
+
+///|
+/// Summarize the supported parts of a schema for tooling and code generation.
+pub fn summarize_schema(schema : Schema) -> SchemaSummary {
+  {
+    kind: schema.kind,
+    property_count: schema.properties.length(),
+    required_count: schema.required.length(),
+    enum_count: schema.enum_json_values.length(),
+    has_items: schema.items is Some(_),
+    has_default: schema.default_value is Some(_),
+    example_count: schema.examples.length(),
+    has_constraints: schema.minimum is Some(_) ||
+    schema.maximum is Some(_) ||
+    schema.multiple_of is Some(_) ||
+    schema.min_length is Some(_) ||
+    schema.max_length is Some(_) ||
+    schema.min_items is Some(_) ||
+    schema.max_items is Some(_) ||
+    schema.min_properties is Some(_) ||
+    schema.max_properties is Some(_) ||
+    schema.const_value is Some(_),
+  }
+}
+
+///|
+/// Return property and item paths in a schema, bounded to avoid pathological input.
+pub fn schema_paths(schema : Schema) -> Array[String] {
+  let result : Array[String] = []
+  collect_schema_paths(schema, "", 0, result)
+  result
 }
 
 ///|
@@ -557,6 +601,37 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
     }
   }
   issues
+}
+
+///|
+/// Validate a document and promote warnings to errors for strict CI mode.
+pub fn validate_strict(document : AsyncApiDocument) -> Array[Diagnostic] {
+  let issues = validate(document)
+  for index, issue in issues {
+    if issue.severity == "warning" {
+      issues[index] = { ..issue, severity: "error" }
+    }
+  }
+  issues
+}
+
+///|
+/// Produce a compact human-readable validation report with counts.
+pub fn validation_report(document : AsyncApiDocument) -> String {
+  let issues = validate(document)
+  let summary = summarize_diagnostics(issues)
+  "document: " +
+  document_summary(document) +
+  "\nstatus: " +
+  highest_severity(issues) +
+  "\nerrors: " +
+  summary.errors.to_string() +
+  "\nwarnings: " +
+  summary.warnings.to_string() +
+  "\ninfos: " +
+  summary.infos.to_string() +
+  "\ndiagnostics:\n" +
+  diagnostics_to_text(issues)
 }
 
 ///|
@@ -2981,6 +3056,36 @@ fn contains_json(items : Array[Json], value : Json) -> Bool {
     }
   }
   false
+}
+
+///|
+fn collect_schema_paths(
+  schema : Schema,
+  path : String,
+  depth : Int,
+  result : Array[String],
+) -> Unit {
+  if depth > 64 {
+    result.push(path + "[depth-limit]")
+    return
+  }
+  for name, property in schema.properties {
+    let child_path = path + "." + name
+    result.push(child_path)
+    if !property.ref_cycle {
+      collect_schema_paths(property, child_path, depth + 1, result)
+    }
+  }
+  match schema.items {
+    Some(items) => {
+      let item_path = path + "[]"
+      result.push(item_path)
+      if !items.ref_cycle {
+        collect_schema_paths(items, item_path, depth + 1, result)
+      }
+    }
+    None => ()
+  }
 }
 
 ///|

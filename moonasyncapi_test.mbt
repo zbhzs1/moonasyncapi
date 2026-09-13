@@ -572,6 +572,38 @@ test "warns on unsupported string formats" {
 }
 
 ///|
+test "summarizes and indexes schemas for tooling" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Inspection\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"],\"properties\":{\"id\":{\"type\":\"integer\"},\"tags\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  let schema = message.payload.unwrap()
+  let summary = summarize_schema(schema)
+  inspect(summary.kind is Some("object"), content="true")
+  inspect(summary.property_count, content="2")
+  inspect(summary.required_count, content="1")
+  inspect(summary.has_items, content="false")
+  let paths = schema_paths(schema)
+  inspect(paths.length(), content="3")
+  inspect(paths[0], content=".id")
+  inspect(paths[1], content=".tags")
+  inspect(paths[2], content=".tags[]")
+}
+
+///|
+test "supports strict validation and report text" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Strict\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",
+  ).unwrap()
+  inspect(validate(document).length(), content="1")
+  inspect(validate_strict(document).length(), content="1")
+  inspect(validate_strict(document)[0].severity, content="error")
+  inspect(validation_report(document).contains("warnings: 1"), content="true")
+}
+
+///|
 test "reports server security requirement changes" {
   let before = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"security\":[{\"apiKey\":[]}] }},\"components\":{\"securitySchemes\":{\"apiKey\":{\"type\":\"apiKey\",\"in\":\"header\"}}},\"channels\":{}}",

@@ -48,7 +48,11 @@ pub fn render_channel_address(AsyncApiChannel, Map[String, String]) -> Result[St
 
 pub fn render_server_endpoint(AsyncApiServer, Map[String, String]) -> Result[String, String]
 
+pub fn schema_paths(Schema) -> Array[String]
+
 pub fn summarize_diagnostics(Array[Diagnostic]) -> DiagnosticSummary
+
+pub fn summarize_schema(Schema) -> SchemaSummary
 
 pub fn validate(AsyncApiDocument) -> Array[Diagnostic]
 
@@ -59,6 +63,10 @@ pub fn validate_operation_payload(AsyncApiDocument, String, Json) -> Array[Diagn
 pub fn validate_operations(AsyncApiDocument, Map[String, Json]) -> Array[OperationValidationReport]
 
 pub fn validate_payload(AsyncApiMessage, Json) -> Array[Diagnostic]
+
+pub fn validate_strict(AsyncApiDocument) -> Array[Diagnostic]
+
+pub fn validation_report(AsyncApiDocument) -> String
 
 // Errors
 
@@ -168,6 +176,17 @@ pub struct Schema {
   max_properties : Double?
   additional_properties : Bool?
   unsupported_keywords : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub struct SchemaSummary {
+  kind : String?
+  property_count : Int
+  required_count : Int
+  enum_count : Int
+  has_items : Bool
+  has_default : Bool
+  example_count : Int
+  has_constraints : Bool
 } derive(Eq, @debug.Debug)
 
 pub struct SecurityScheme {
