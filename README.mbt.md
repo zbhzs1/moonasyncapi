@@ -13,6 +13,34 @@ human-readable validation reports are also available for tooling. Operation payl
 and header batches can be checked offline for CI consumers. See
 `docs/SUPPORT_MATRIX.md` for the exact boundary.
 
+## Install
+
+```bash
+moon add zbhzs1/moonasyncapi
+```
+
+## Minimal Usage
+
+```moonbit nocheck
+let source =
+  "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Events\"},\"channels\":{}}"
+match @moonasyncapi.parse(source) {
+  Ok(document) => {
+    let issues = @moonasyncapi.validate(document)
+    println(@moonasyncapi.diagnostics_to_text(issues))
+  }
+  Err(message) => println("parse error: " + message)
+}
+```
+
+Add the package import to the consumer's `moon.pkg`:
+
+```moonbit nocheck
+import {
+  "zbhzs1/moonasyncapi",
+}
+```
+
 ## Verification
 
 ```bash

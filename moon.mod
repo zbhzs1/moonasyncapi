@@ -9,13 +9,13 @@
 //   "moonbitlang/x@0.4.6",
 // }
 
-name = "moonasyncapi/moonasyncapi"
+name = "zbhzs1/moonasyncapi"
 
 version = "0.1.0"
 
 readme = "README.mbt.md"
 
-repository = ""
+repository = "https://github.com/zbhzs1/moonasyncapi"
 
 license = "Apache-2.0"
 
