@@ -40,6 +40,8 @@ pub fn find_server_variable(AsyncApiServer, String) -> ServerVariable?
 
 pub fn highest_severity(Array[Diagnostic]) -> String
 
+pub fn operation_report_diagnostics(Array[OperationValidationReport]) -> Array[Diagnostic]
+
 pub fn parse(String) -> Result[AsyncApiDocument, String]
 
 pub fn render_channel_address(AsyncApiChannel, Map[String, String]) -> Result[String, String]
@@ -53,6 +55,8 @@ pub fn validate(AsyncApiDocument) -> Array[Diagnostic]
 pub fn validate_headers(AsyncApiMessage, Json) -> Array[Diagnostic]
 
 pub fn validate_operation_payload(AsyncApiDocument, String, Json) -> Array[Diagnostic]
+
+pub fn validate_operations(AsyncApiDocument, Map[String, Json]) -> Array[OperationValidationReport]
 
 pub fn validate_payload(AsyncApiMessage, Json) -> Array[Diagnostic]
 
@@ -126,6 +130,15 @@ pub struct DiagnosticSummary {
   warnings : Int
   infos : Int
   total : Int
+} derive(Eq, @debug.Debug)
+
+pub struct OperationValidationReport {
+  operation_name : String
+  action : String
+  channel : String
+  protocol : String?
+  message_count : Int
+  diagnostics : Array[Diagnostic]
 } derive(Eq, @debug.Debug)
 
 pub struct Schema {

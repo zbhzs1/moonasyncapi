@@ -546,6 +546,39 @@ test "reports server security requirement changes" {
 }
 
 ///|
+test "validates operation payloads as independent reports" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Operations\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"object\",\"required\":[\"id\"],\"properties\":{\"id\":{\"type\":\"integer\"}}}},\"deleted\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"create\":{\"action\":\"send\",\"channel\":\"events\",\"messages\":[\"created\"]},\"remove\":{\"action\":\"send\",\"channel\":\"events\",\"messages\":[\"deleted\"]}}}",
+  ).unwrap()
+  let reports = validate_operations(
+    document,
+    Map([("create", @json.parse("{\"id\":\"wrong\"}"))]),
+  )
+  inspect(reports.length(), content="2")
+  inspect(reports[0].operation_name, content="create")
+  inspect(reports[0].message_count, content="1")
+  inspect(reports[0].diagnostics.length(), content="1")
+  inspect(reports[1].diagnostics.length(), content="1")
+  inspect(operation_report_diagnostics(reports).length(), content="2")
+}
+
+///|
+test "returns clean operation report for valid payload" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Operations\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"messages\":[\"created\"]}}}",
+  ).unwrap()
+  let reports = validate_operations(
+    document,
+    Map([("receive", @json.parse("\"ok\""))]),
+  )
+  inspect(reports[0].diagnostics.length(), content="0")
+  inspect(
+    highest_severity(operation_report_diagnostics(reports)),
+    content="none",
+  )
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",

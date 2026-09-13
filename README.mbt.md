@@ -7,7 +7,8 @@ diagnostics that can be used before an MQTT or other message adapter sends data.
 The current release implements local references, server/channel/message extraction,
 address parameter checks, a documented JSON Schema subset, MQTT/Kafka/AMQP binding-name
 recognition, descriptive security scheme parsing, payload validation, and stable
-compatibility diagnostics. See
+compatibility diagnostics. Batch operation reports are available for CI consumers.
+See
 `docs/SUPPORT_MATRIX.md` for the exact boundary.
 
 ## Verification

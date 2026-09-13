@@ -125,6 +125,16 @@ pub struct DiagnosticSummary {
 } derive(Eq, Debug)
 
 ///|
+pub struct OperationValidationReport {
+  operation_name : String
+  action : String
+  channel : String
+  protocol : String?
+  message_count : Int
+  diagnostics : Array[Diagnostic]
+} derive(Eq, Debug)
+
+///|
 pub fn parse(input : String) -> Result[AsyncApiDocument, String] {
   let value = @json.parse(input) catch {
     _ => return Err("invalid JSON".to_string())
@@ -1448,6 +1458,52 @@ pub fn validate_operation_payload(
     }
   }
   issues
+}
+
+///|
+/// Validate payloads for several operations in one deterministic report.
+pub fn validate_operations(
+  document : AsyncApiDocument,
+  payloads : Map[String, Json],
+) -> Array[OperationValidationReport] {
+  let reports : Array[OperationValidationReport] = []
+  for operation in document.operations {
+    let diagnostics = match payloads.get(operation.name) {
+      Some(payload) =>
+        validate_operation_payload(document, operation.name, payload)
+      None =>
+        [
+          warning(
+            "operation.payload.missing",
+            "$.operations." + operation.name,
+            "no payload was supplied for this operation",
+          ),
+        ]
+    }
+    reports.push({
+      operation_name: operation.name,
+      action: operation.action,
+      channel: operation.channel,
+      protocol: operation.protocol,
+      message_count: operation.messages.length(),
+      diagnostics,
+    })
+  }
+  reports
+}
+
+///|
+/// Flatten operation report diagnostics for CI summary handling.
+pub fn operation_report_diagnostics(
+  reports : Array[OperationValidationReport],
+) -> Array[Diagnostic] {
+  let result : Array[Diagnostic] = []
+  for report in reports {
+    for issue in report.diagnostics {
+      result.push(issue)
+    }
+  }
+  result
 }
 
 ///|
