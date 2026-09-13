@@ -3,17 +3,27 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: moonbitlang/setup-moontoolchain@v0.1
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Show MoonBit version
+        run: moon version --all
       - name: Format check
         run: moon fmt --check
+      - name: Generate interfaces
+        run: moon info
       - name: Type check
         run: moon check --deny-warn
+      - name: Build
+        run: moon build
       - name: Tests
         run: moon test
       - name: Runnable example
