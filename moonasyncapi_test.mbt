@@ -62,7 +62,7 @@ test "exposes parsed contract lookup APIs" {
   inspect(find_operation(document, "receive") is Some(_), content="true")
   inspect(
     document_summary(document),
-    content="AsyncAPI 3.0.0: 1 channels, 1 operations, 1 messages, 1 schemas, 0 servers",
+    content="AsyncAPI 3.0.0: 1 channels, 1 operations, 1 messages, 1 schemas, 0 servers, 0 security schemes",
   )
 }
 
@@ -505,6 +505,44 @@ test "reports server variable compatibility changes" {
   inspect(issues[1].code, content="compat.server.variable.default.changed")
   inspect(issues[2].code, content="compat.server.variable.removed")
   inspect(issues[3].code, content="compat.server.variable.added")
+}
+
+///|
+test "parses and validates descriptive security schemes" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Security\"},\"servers\":{\"production\":{\"host\":\"broker.example.com\",\"protocol\":\"mqtts\",\"security\":[{\"apiKey\":[]}] }},\"components\":{\"securitySchemes\":{\"apiKey\":{\"type\":\"apiKey\",\"in\":\"header\",\"description\":\"API token\"},\"bearer\":{\"type\":\"http\",\"scheme\":\"bearer\"}}},\"channels\":{}}",
+  ).unwrap()
+  inspect(find_security_scheme(document, "apiKey") is Some(_), content="true")
+  inspect(
+    find_server(document, "production").unwrap().security_requirements.length(),
+    content="1",
+  )
+  inspect(validate(document).length(), content="1")
+  inspect(validate(document)[0].code, content="channels.empty")
+}
+
+///|
+test "diagnoses invalid security scheme declarations" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Security\"},\"components\":{\"securitySchemes\":{\"missing\":{},\"badKey\":{\"type\":\"apiKey\",\"in\":\"path\"},\"badHttp\":{\"type\":\"http\"}}},\"channels\":{}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="4")
+  inspect(diagnostics_by_severity(issues, "error").length(), content="3")
+  inspect(diagnostics_by_severity(issues, "warning").length(), content="1")
+}
+
+///|
+test "reports server security requirement changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"security\":[{\"apiKey\":[]}] }},\"components\":{\"securitySchemes\":{\"apiKey\":{\"type\":\"apiKey\",\"in\":\"header\"}}},\"channels\":{}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"security\":[]}},\"components\":{\"securitySchemes\":{\"apiKey\":{\"type\":\"apiKey\",\"in\":\"header\"}}},\"channels\":{}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="compat.server.security.changed")
 }
 
 ///|

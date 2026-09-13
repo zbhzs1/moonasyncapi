@@ -13,6 +13,17 @@ pub struct AsyncApiDocument {
   schemas : Map[String, Schema]
   messages : Map[String, AsyncApiMessage]
   servers : Map[String, AsyncApiServer]
+  security_schemes : Map[String, SecurityScheme]
+} derive(Eq, Debug)
+
+///|
+pub struct SecurityScheme {
+  name : String
+  kind : String
+  description : String?
+  location : String?
+  scheme : String?
+  bearer_format : String?
 } derive(Eq, Debug)
 
 ///|
@@ -24,6 +35,7 @@ pub struct AsyncApiServer {
   pathname : String?
   description : String?
   variables : Map[String, ServerVariable]
+  security_requirements : Array[String]
 } derive(Eq, Debug)
 
 ///|
@@ -248,6 +260,15 @@ pub fn find_server_variable(
 }
 
 ///|
+/// Find a reusable security scheme declaration.
+pub fn find_security_scheme(
+  document : AsyncApiDocument,
+  name : String,
+) -> SecurityScheme? {
+  document.security_schemes.get(name)
+}
+
+///|
 /// Render a server endpoint using explicit values and declared defaults.
 pub fn render_server_endpoint(
   server : AsyncApiServer,
@@ -286,7 +307,9 @@ pub fn document_summary(document : AsyncApiDocument) -> String {
   document.schemas.length().to_string() +
   " schemas, " +
   document.servers.length().to_string() +
-  " servers"
+  " servers, " +
+  document.security_schemes.length().to_string() +
+  " security schemes"
 }
 
 ///|
@@ -421,6 +444,7 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
   for name, server in document.servers {
     validate_server(server, "$.servers." + name, issues)
   }
+  validate_security_schemes(document.security_schemes, issues)
   for name, schema in document.schemas {
     validate_schema_definition(schema, "$.components.schemas." + name, issues)
   }
@@ -848,6 +872,91 @@ fn validate_server(
     None => ()
   }
   validate_server_variables(server, path, issues)
+  for scheme_name in server.security_requirements {
+    if scheme_name.length() == 0 {
+      issues.push(
+        warning(
+          "server.security.empty",
+          path + ".security",
+          "server security requirement name must not be empty",
+        ),
+      )
+    }
+  }
+}
+
+///|
+fn validate_security_schemes(
+  schemes : Map[String, SecurityScheme],
+  issues : Array[Diagnostic],
+) -> Unit {
+  for name, scheme in schemes {
+    let path = "$.components.securitySchemes." + name
+    if scheme.kind.length() == 0 {
+      issues.push(
+        error(
+          "security.type.missing",
+          path + ".type",
+          "security scheme type is missing",
+        ),
+      )
+    } else if scheme.kind != "apiKey" &&
+      scheme.kind != "http" &&
+      scheme.kind != "oauth2" &&
+      scheme.kind != "openIdConnect" {
+      issues.push(
+        warning(
+          "security.type.unsupported",
+          path + ".type",
+          "security scheme type is outside the supported descriptive set",
+        ),
+      )
+    }
+    if scheme.kind == "apiKey" {
+      match scheme.location {
+        Some(location) =>
+          if location != "header" && location != "query" && location != "cookie" {
+            issues.push(
+              error(
+                "security.location.invalid",
+                path + ".in",
+                "apiKey location must be header, query, or cookie",
+              ),
+            )
+          }
+        None =>
+          issues.push(
+            error(
+              "security.location.missing",
+              path + ".in",
+              "apiKey security scheme location is missing",
+            ),
+          )
+      }
+    }
+    if scheme.kind == "http" {
+      match scheme.scheme {
+        Some(value) =>
+          if value.length() == 0 {
+            issues.push(
+              error(
+                "security.scheme.empty",
+                path + ".scheme",
+                "HTTP security scheme name must not be empty",
+              ),
+            )
+          }
+        None =>
+          issues.push(
+            error(
+              "security.scheme.missing",
+              path + ".scheme",
+              "HTTP security scheme name is missing",
+            ),
+          )
+      }
+    }
+  }
 }
 
 ///|
@@ -1038,6 +1147,15 @@ fn compare_servers(
           "$.servers." + name,
           issues,
         )
+        if old_server.security_requirements != new_server.security_requirements {
+          issues.push(
+            warning(
+              "compat.server.security.changed",
+              "$.servers." + name + ".security",
+              "server security requirements changed",
+            ),
+          )
+        }
       }
     }
   }
@@ -1388,6 +1506,7 @@ fn parse_document(value : Json) -> Result[AsyncApiDocument, String] {
     Some(_) => return Err("$.servers must be an object".to_string())
     None => Map([])
   }
+  let security_schemes = parse_security_schemes(root)
   Ok({
     asyncapi,
     version: asyncapi,
@@ -1397,7 +1516,49 @@ fn parse_document(value : Json) -> Result[AsyncApiDocument, String] {
     schemas,
     messages,
     servers,
+    security_schemes,
   })
+}
+
+///|
+fn parse_security_schemes(
+  root : Map[String, Json],
+) -> Map[String, SecurityScheme] {
+  let result : Map[String, SecurityScheme] = Map([])
+  match root.get("components") {
+    Some(Object(components)) =>
+      match components.get("securitySchemes") {
+        Some(Object(schemes)) =>
+          for name, value in schemes {
+            match value {
+              Object(scheme) =>
+                result[name] = {
+                  name,
+                  kind: match optional_string_field(scheme, "type") {
+                    Some(value) => value
+                    None => ""
+                  },
+                  description: optional_string_field(scheme, "description"),
+                  location: optional_string_field(scheme, "in"),
+                  scheme: optional_string_field(scheme, "scheme"),
+                  bearer_format: optional_string_field(scheme, "bearerFormat"),
+                }
+              _ =>
+                result[name] = {
+                  name,
+                  kind: "",
+                  description: None,
+                  location: None,
+                  scheme: None,
+                  bearer_format: None,
+                }
+            }
+          }
+        _ => ()
+      }
+    _ => ()
+  }
+  result
 }
 
 ///|
@@ -1418,6 +1579,7 @@ fn parse_servers(raw : Map[String, Json]) -> Map[String, AsyncApiServer] {
         let pathname = optional_string_field(server, "pathname")
         let description = optional_string_field(server, "description")
         let variables = parse_server_variables(server)
+        let security_requirements = parse_security_requirements(server)
         result[name] = {
           name,
           host,
@@ -1426,6 +1588,7 @@ fn parse_servers(raw : Map[String, Json]) -> Map[String, AsyncApiServer] {
           pathname,
           description,
           variables,
+          security_requirements,
         }
       }
       _ =>
@@ -1437,6 +1600,7 @@ fn parse_servers(raw : Map[String, Json]) -> Map[String, AsyncApiServer] {
           pathname: None,
           description: None,
           variables: Map([]),
+          security_requirements: [],
         }
     }
   }
@@ -1475,6 +1639,25 @@ fn parse_server_variables(
               enum_values: [],
               description: None,
             }
+        }
+      }
+    _ => ()
+  }
+  result
+}
+
+///|
+fn parse_security_requirements(server : Map[String, Json]) -> Array[String] {
+  let result : Array[String] = []
+  match server.get("security") {
+    Some(Array(values)) =>
+      for value in values {
+        match value {
+          Object(requirement) =>
+            for name, _ in requirement {
+              result.push(name)
+            }
+          _ => ()
         }
       }
     _ => ()

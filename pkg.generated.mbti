@@ -32,6 +32,8 @@ pub fn find_operation(AsyncApiDocument, String) -> AsyncApiOperation?
 
 pub fn find_schema(AsyncApiDocument, String) -> Schema?
 
+pub fn find_security_scheme(AsyncApiDocument, String) -> SecurityScheme?
+
 pub fn find_server(AsyncApiDocument, String) -> AsyncApiServer?
 
 pub fn find_server_variable(AsyncApiServer, String) -> ServerVariable?
@@ -73,6 +75,7 @@ pub struct AsyncApiDocument {
   schemas : Map[String, Schema]
   messages : Map[String, AsyncApiMessage]
   servers : Map[String, AsyncApiServer]
+  security_schemes : Map[String, SecurityScheme]
 } derive(Eq, @debug.Debug)
 
 pub struct AsyncApiMessage {
@@ -100,6 +103,7 @@ pub struct AsyncApiServer {
   pathname : String?
   description : String?
   variables : Map[String, ServerVariable]
+  security_requirements : Array[String]
 } derive(Eq, @debug.Debug)
 
 pub struct ChannelParameter {
@@ -147,6 +151,15 @@ pub struct Schema {
   min_properties : Double?
   max_properties : Double?
   unsupported_keywords : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub struct SecurityScheme {
+  name : String
+  kind : String
+  description : String?
+  location : String?
+  scheme : String?
+  bearer_format : String?
 } derive(Eq, @debug.Debug)
 
 pub struct ServerVariable {
