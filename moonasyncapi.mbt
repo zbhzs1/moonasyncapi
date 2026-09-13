@@ -90,6 +90,7 @@ pub struct Schema {
   enum_values : Array[String]
   enum_json_values : Array[Json]
   const_value : Json?
+  format_name : String?
   default_value : Json?
   examples : Array[Json]
   ref_name : String?
@@ -458,6 +459,19 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
     validate_server(server, "$.servers." + name, issues)
   }
   validate_security_schemes(document.security_schemes, issues)
+  for server_name, server in document.servers {
+    for requirement in server.security_requirements {
+      if document.security_schemes.get(requirement) is None {
+        issues.push(
+          error(
+            "server.security.reference.missing",
+            "$.servers." + server_name + ".security",
+            "server references an undeclared security scheme: " + requirement,
+          ),
+        )
+      }
+    }
+  }
   for name, schema in document.schemas {
     validate_schema_definition(schema, "$.components.schemas." + name, issues)
   }
@@ -1981,6 +1995,7 @@ fn parse_schema(value : Json) -> Schema {
         _ => ()
       }
       let const_value = object.get("const")
+      let format_name = optional_string_field(object, "format")
       let default_value = object.get("default")
       let examples : Array[Json] = []
       match object.get("examples") {
@@ -2022,6 +2037,7 @@ fn parse_schema(value : Json) -> Schema {
         enum_values,
         enum_json_values,
         const_value,
+        format_name,
         default_value,
         examples,
         ref_name,
@@ -2051,6 +2067,7 @@ fn parse_schema(value : Json) -> Schema {
         enum_values: [],
         enum_json_values: [],
         const_value: None,
+        format_name: None,
         default_value: None,
         examples: [],
         ref_name: None,
@@ -2349,6 +2366,19 @@ fn validate_schema_definition(
       ),
     )
   }
+  match schema.format_name {
+    Some(format) =>
+      if format != "email" && format != "uuid" && format != "date-time" {
+        issues.push(
+          warning(
+            "schema.format.unsupported",
+            path + ".format",
+            "string format is outside the supported subset: " + format,
+          ),
+        )
+      }
+    None => ()
+  }
   match schema.default_value {
     Some(value) => {
       let default_issues : Array[Diagnostic] = []
@@ -2458,8 +2488,7 @@ fn is_unsupported_schema_keyword(keyword : String) -> Bool {
   keyword == "anyOf" ||
   keyword == "oneOf" ||
   keyword == "not" ||
-  keyword == "pattern" ||
-  keyword == "format"
+  keyword == "pattern"
 }
 
 ///|
@@ -2670,6 +2699,21 @@ fn validate_json_schema(
       ),
     )
     return
+  }
+  match schema.format_name {
+    Some(format) =>
+      match value {
+        String(text) =>
+          if !matches_string_format(format, text) {
+            issues.push(
+              error(
+                "payload.string.format.invalid", path, "string does not match the declared format",
+              ),
+            )
+          }
+        _ => ()
+      }
+    None => ()
   }
   if schema.enum_json_values.length() > 0 &&
     !contains_json(schema.enum_json_values, value) {
@@ -2940,6 +2984,24 @@ fn contains_json(items : Array[Json], value : Json) -> Bool {
 }
 
 ///|
+fn matches_string_format(format : String, value : String) -> Bool {
+  if format == "email" {
+    let pieces = value.split("@")
+    pieces.length() == 2 && value.contains(".")
+  } else if format == "uuid" {
+    value.length() == 36 &&
+    value[8:9] == "-" &&
+    value[13:14] == "-" &&
+    value[18:19] == "-" &&
+    value[23:24] == "-"
+  } else if format == "date-time" {
+    value.contains("T") && value.contains(":")
+  } else {
+    true
+  }
+}
+
+///|
 fn compare_schema_compatibility(
   before : Schema,
   after : Schema,
@@ -2949,6 +3011,15 @@ fn compare_schema_compatibility(
   if before.kind != after.kind {
     issues.push(
       error("compat.schema.type.changed", path + ".type", "schema type changed"),
+    )
+  }
+  if before.format_name != after.format_name {
+    issues.push(
+      warning(
+        "compat.schema.format.changed",
+        path + ".format",
+        "schema string format changed",
+      ),
     )
   }
   compare_lower_bound(

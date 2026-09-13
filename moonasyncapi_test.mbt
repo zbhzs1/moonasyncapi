@@ -533,6 +533,45 @@ test "diagnoses invalid security scheme declarations" {
 }
 
 ///|
+test "diagnoses dangling server security references" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Security\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"security\":[{\"missing\":[]}] }},\"components\":{\"securitySchemes\":{}},\"channels\":{}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="channels.empty")
+  inspect(issues[1].code, content="server.security.reference.missing")
+}
+
+///|
+test "validates supported string formats" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Formats\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"string\",\"format\":\"email\"}}}}}}",
+  ).unwrap()
+  let message = find_channel(document, "events").unwrap().messages
+    .get("event")
+    .unwrap()
+  inspect(
+    validate_payload(message, @json.parse("\"a@example.com\"")).length(),
+    content="0",
+  )
+  inspect(
+    validate_payload(message, @json.parse("\"invalid\"")).length(),
+    content="1",
+  )
+}
+
+///|
+test "warns on unsupported string formats" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Formats\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"string\",\"format\":\"hostname\"}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="schema.format.unsupported")
+}
+
+///|
 test "reports server security requirement changes" {
   let before = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"security\":[{\"apiKey\":[]}] }},\"components\":{\"securitySchemes\":{\"apiKey\":{\"type\":\"apiKey\",\"in\":\"header\"}}},\"channels\":{}}",
@@ -734,9 +773,8 @@ test "diagnoses unsupported schema keywords" {
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Boundaries\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"type\":\"string\",\"pattern\":\"^[a-z]+$\",\"format\":\"email\"}}}}}}",
   ).unwrap()
   let issues = validate(document)
-  inspect(issues.length(), content="2")
+  inspect(issues.length(), content="1")
   inspect(issues[0].code, content="schema.keyword.unsupported")
-  inspect(issues[1].code, content="schema.keyword.unsupported")
 }
 
 ///|
