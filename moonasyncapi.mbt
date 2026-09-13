@@ -143,6 +143,15 @@ pub struct OperationValidationReport {
 } derive(Eq, Debug)
 
 ///|
+pub struct OperationHeadersValidationReport {
+  operation_name : String
+  action : String
+  channel : String
+  message_count : Int
+  diagnostics : Array[Diagnostic]
+} derive(Eq, Debug)
+
+///|
 pub struct SchemaSummary {
   kind : String?
   property_count : Int
@@ -396,6 +405,111 @@ pub fn operation_names(document : AsyncApiDocument) -> Array[String] {
 }
 
 ///|
+/// Return operations using one AsyncAPI action, such as `send` or `receive`.
+pub fn operation_names_by_action(
+  document : AsyncApiDocument,
+  action : String,
+) -> Array[String] {
+  let names : Array[String] = []
+  for operation in document.operations {
+    if operation.action == action {
+      names.push(operation.name)
+    }
+  }
+  names
+}
+
+///|
+/// Return operations that declare a particular protocol binding.
+pub fn operation_names_by_protocol(
+  document : AsyncApiDocument,
+  protocol : String,
+) -> Array[String] {
+  let names : Array[String] = []
+  for operation in document.operations {
+    match operation.protocol {
+      Some(value) => if value == protocol { names.push(operation.name) }
+      None => ()
+    }
+  }
+  names
+}
+
+///|
+/// Count operations using one AsyncAPI action.
+pub fn operation_count_by_action(
+  document : AsyncApiDocument,
+  action : String,
+) -> Int {
+  operation_names_by_action(document, action).length()
+}
+
+///|
+/// Count operations that declare a protocol binding.
+pub fn operation_count_by_protocol(
+  document : AsyncApiDocument,
+  protocol : String,
+) -> Int {
+  operation_names_by_protocol(document, protocol).length()
+}
+
+///|
+/// Test whether an operation name is declared in the document.
+pub fn has_operation(document : AsyncApiDocument, name : String) -> Bool {
+  find_operation(document, name) is Some(_)
+}
+
+///|
+/// Return channel names in document declaration order.
+pub fn channel_names(document : AsyncApiDocument) -> Array[String] {
+  let names : Array[String] = []
+  for name, _ in document.channels {
+    names.push(name)
+  }
+  names
+}
+
+///|
+/// Return component message names in document declaration order.
+pub fn message_names(document : AsyncApiDocument) -> Array[String] {
+  let names : Array[String] = []
+  for name, _ in document.messages {
+    names.push(name)
+  }
+  names
+}
+
+///|
+/// Return schema names in document declaration order.
+pub fn schema_names(document : AsyncApiDocument) -> Array[String] {
+  let names : Array[String] = []
+  for name, _ in document.schemas {
+    names.push(name)
+  }
+  names
+}
+
+///|
+/// Return server names in document declaration order.
+pub fn server_names(document : AsyncApiDocument) -> Array[String] {
+  let names : Array[String] = []
+  for name, _ in document.servers {
+    names.push(name)
+  }
+  names
+}
+
+///|
+/// Return security scheme names in document declaration order.
+pub fn security_scheme_names(document : AsyncApiDocument) -> Array[String] {
+  let names : Array[String] = []
+  for name, _ in document.security_schemes {
+    names.push(name)
+  }
+  names
+}
+
+///|
 /// Render operation reports without exposing internal data layout.
 pub fn operation_reports_to_text(
   reports : Array[OperationValidationReport],
@@ -415,6 +529,59 @@ pub fn operation_reports_to_text(
     )
   }
   lines.join("\n")
+}
+
+///|
+/// Render the inventory as stable key/value lines for CI logs.
+pub fn document_inventory_to_text(inventory : DocumentInventory) -> String {
+  [
+    "channels=" + inventory.channel_count.to_string(),
+    "messages=" + inventory.message_count.to_string(),
+    "operations=" + inventory.operation_count.to_string(),
+    "schemas=" + inventory.schema_count.to_string(),
+    "servers=" + inventory.server_count.to_string(),
+    "security_schemes=" + inventory.security_scheme_count.to_string(),
+    "parameters=" + inventory.parameter_count.to_string(),
+  ].join("\n")
+}
+
+///|
+/// Render header reports without exposing internal report layout.
+pub fn operation_headers_reports_to_text(
+  reports : Array[OperationHeadersValidationReport],
+) -> String {
+  let lines : Array[String] = []
+  for report in reports {
+    lines.push(
+      report.operation_name +
+      " " +
+      report.action +
+      " " +
+      report.channel +
+      " messages=" +
+      report.message_count.to_string() +
+      " status=" +
+      highest_severity(report.diagnostics),
+    )
+  }
+  lines.join("\n")
+}
+
+///|
+/// Render the names available in each top-level contract namespace.
+pub fn document_namespaces_to_text(document : AsyncApiDocument) -> String {
+  let channels = channel_names(document).join(",")
+  let messages = message_names(document).join(",")
+  let schemas = schema_names(document).join(",")
+  let servers = server_names(document).join(",")
+  let security = security_scheme_names(document).join(",")
+  [
+    "channels=" + channels,
+    "messages=" + messages,
+    "schemas=" + schemas,
+    "servers=" + servers,
+    "security_schemes=" + security,
+  ].join("\n")
 }
 
 ///|
@@ -1706,6 +1873,106 @@ pub fn validate_operation_payload(
     }
   }
   issues
+}
+
+///|
+/// Validate headers against every message selected by an operation.
+pub fn validate_operation_headers(
+  document : AsyncApiDocument,
+  operation_name : String,
+  headers : Json,
+) -> Array[Diagnostic] {
+  let issues : Array[Diagnostic] = []
+  let operation = match find_operation_in(document.operations, operation_name) {
+    Some(value) => value
+    None => {
+      issues.push(
+        error(
+          "operation.missing",
+          "$.operations." + operation_name,
+          "operation does not exist",
+        ),
+      )
+      return issues
+    }
+  }
+  let channel = match document.channels.get(operation.channel) {
+    Some(value) => value
+    None => {
+      issues.push(
+        error(
+          "operation.channel.missing",
+          "$.operations." + operation_name + ".channel",
+          "operation references an unknown channel",
+        ),
+      )
+      return issues
+    }
+  }
+  if operation.messages.length() == 0 {
+    issues.push(
+      warning(
+        "operation.messages.empty",
+        "$.operations." + operation_name + ".messages",
+        "operation declares no messages",
+      ),
+    )
+  }
+  for message_name in operation.messages {
+    match channel.messages.get(message_name) {
+      Some(message) =>
+        for issue in validate_headers(message, headers) {
+          issues.push(issue)
+        }
+      None =>
+        match document.messages.get(message_name) {
+          Some(message) =>
+            for issue in validate_headers(message, headers) {
+              issues.push(issue)
+            }
+          None =>
+            issues.push(
+              error(
+                "operation.message.missing",
+                "$.operations." + operation_name + ".messages",
+                "operation references an unknown message",
+              ),
+            )
+        }
+    }
+  }
+  issues
+}
+
+///|
+/// Validate headers for every operation and preserve operation context.
+pub fn validate_operation_headers_batch(
+  document : AsyncApiDocument,
+  headers_by_operation : Map[String, Json],
+) -> Array[OperationHeadersValidationReport] {
+  let reports : Array[OperationHeadersValidationReport] = []
+  for operation in document.operations {
+    let diagnostics = match headers_by_operation.get(operation.name) {
+      Some(headers) =>
+        validate_operation_headers(document, operation.name, headers)
+      None =>
+        [
+          warning(
+            "operation.headers.missing",
+            "$.operations." + operation.name,
+            "no headers were supplied for this operation",
+          ),
+        ]
+    }
+    reports.push({
+      operation_name: operation.name,
+      action: operation.action,
+      channel: operation.channel,
+      message_count: operation.messages.length(),
+      diagnostics,
+    })
+  }
+  reports
 }
 
 ///|

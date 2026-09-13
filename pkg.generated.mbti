@@ -10,6 +10,8 @@ pub fn address_parameters(String) -> Array[String]
 
 pub fn channel_message_names(AsyncApiDocument, String) -> Array[String]
 
+pub fn channel_names(AsyncApiDocument) -> Array[String]
+
 pub fn diagnostics_by_severity(Array[Diagnostic], String) -> Array[Diagnostic]
 
 pub fn diagnostics_count(Array[Diagnostic], String) -> Int
@@ -23,6 +25,10 @@ pub fn diagnostics_to_text(Array[Diagnostic]) -> String
 pub fn diff(AsyncApiDocument, AsyncApiDocument) -> Array[Diagnostic]
 
 pub fn document_inventory(AsyncApiDocument) -> DocumentInventory
+
+pub fn document_inventory_to_text(DocumentInventory) -> String
+
+pub fn document_namespaces_to_text(AsyncApiDocument) -> String
 
 pub fn document_summary(AsyncApiDocument) -> String
 
@@ -42,9 +48,23 @@ pub fn find_server(AsyncApiDocument, String) -> AsyncApiServer?
 
 pub fn find_server_variable(AsyncApiServer, String) -> ServerVariable?
 
+pub fn has_operation(AsyncApiDocument, String) -> Bool
+
 pub fn highest_severity(Array[Diagnostic]) -> String
 
+pub fn message_names(AsyncApiDocument) -> Array[String]
+
+pub fn operation_count_by_action(AsyncApiDocument, String) -> Int
+
+pub fn operation_count_by_protocol(AsyncApiDocument, String) -> Int
+
+pub fn operation_headers_reports_to_text(Array[OperationHeadersValidationReport]) -> String
+
 pub fn operation_names(AsyncApiDocument) -> Array[String]
+
+pub fn operation_names_by_action(AsyncApiDocument, String) -> Array[String]
+
+pub fn operation_names_by_protocol(AsyncApiDocument, String) -> Array[String]
 
 pub fn operation_report_diagnostics(Array[OperationValidationReport]) -> Array[Diagnostic]
 
@@ -58,7 +78,13 @@ pub fn render_channel_address(AsyncApiChannel, Map[String, String]) -> Result[St
 
 pub fn render_server_endpoint(AsyncApiServer, Map[String, String]) -> Result[String, String]
 
+pub fn schema_names(AsyncApiDocument) -> Array[String]
+
 pub fn schema_paths(Schema) -> Array[String]
+
+pub fn security_scheme_names(AsyncApiDocument) -> Array[String]
+
+pub fn server_names(AsyncApiDocument) -> Array[String]
 
 pub fn summarize_diagnostics(Array[Diagnostic]) -> DiagnosticSummary
 
@@ -67,6 +93,10 @@ pub fn summarize_schema(Schema) -> SchemaSummary
 pub fn validate(AsyncApiDocument) -> Array[Diagnostic]
 
 pub fn validate_headers(AsyncApiMessage, Json) -> Array[Diagnostic]
+
+pub fn validate_operation_headers(AsyncApiDocument, String, Json) -> Array[Diagnostic]
+
+pub fn validate_operation_headers_batch(AsyncApiDocument, Map[String, Json]) -> Array[OperationHeadersValidationReport]
 
 pub fn validate_operation_payload(AsyncApiDocument, String, Json) -> Array[Diagnostic]
 
@@ -162,6 +192,14 @@ pub struct DocumentInventory {
   server_count : Int
   security_scheme_count : Int
   parameter_count : Int
+} derive(Eq, @debug.Debug)
+
+pub struct OperationHeadersValidationReport {
+  operation_name : String
+  action : String
+  channel : String
+  message_count : Int
+  diagnostics : Array[Diagnostic]
 } derive(Eq, @debug.Debug)
 
 pub struct OperationValidationReport {

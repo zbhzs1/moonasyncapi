@@ -675,6 +675,44 @@ test "renders operation report text" {
 }
 
 ///|
+test "validates operation headers and renders contract indexes" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Headers\"},\"servers\":{\"prod\":{\"host\":\"example.com\",\"protocol\":\"mqtt\"}},\"components\":{\"schemas\":{\"Trace\":{\"type\":\"string\"}},\"securitySchemes\":{\"key\":{\"type\":\"apiKey\",\"in\":\"header\"}},\"messages\":{\"created\":{\"headers\":{\"type\":\"object\",\"required\":[\"x-trace\"],\"properties\":{\"x-trace\":{\"type\":\"string\"}}}}}},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{}}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"messages\":[\"created\"]}}}",
+  ).unwrap()
+  let reports = validate_operation_headers_batch(
+    document,
+    Map([("receive", @json.parse("{\"x-trace\":7}"))]),
+  )
+  inspect(reports.length(), content="1")
+  inspect(reports[0].diagnostics[0].code, content="payload.type.mismatch")
+  inspect(
+    operation_headers_reports_to_text(reports),
+    content="receive receive events messages=1 status=error",
+  )
+  inspect(
+    document_inventory_to_text(document_inventory(document)).contains(
+      "schemas=1",
+    ),
+    content="true",
+  )
+  inspect(
+    document_namespaces_to_text(document).contains("servers=prod"),
+    content="true",
+  )
+  inspect(schema_names(document)[0], content="Trace")
+  inspect(server_names(document)[0], content="prod")
+  inspect(security_scheme_names(document)[0], content="key")
+  inspect(message_names(document)[0], content="created")
+  inspect(channel_names(document)[0], content="events")
+  inspect(operation_names_by_action(document, "receive")[0], content="receive")
+  inspect(operation_count_by_action(document, "receive"), content="1")
+  inspect(operation_count_by_protocol(document, "mqtt"), content="0")
+  inspect(has_operation(document, "receive"), content="true")
+  inspect(has_operation(document, "missing"), content="false")
+  inspect(operation_names_by_protocol(document, "mqtt").length(), content="0")
+}
+
+///|
 test "reports server security requirement changes" {
   let before = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"security\":[{\"apiKey\":[]}] }},\"components\":{\"securitySchemes\":{\"apiKey\":{\"type\":\"apiKey\",\"in\":\"header\"}}},\"channels\":{}}",
