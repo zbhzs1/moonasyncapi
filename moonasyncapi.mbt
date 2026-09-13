@@ -93,6 +93,7 @@ pub struct Schema {
   default_value : Json?
   examples : Array[Json]
   ref_name : String?
+  ref_cycle : Bool
   items : Schema?
   minimum : Double?
   maximum : Double?
@@ -2018,6 +2019,7 @@ fn parse_schema(value : Json) -> Schema {
         default_value,
         examples,
         ref_name,
+        ref_cycle: false,
         items,
         minimum,
         maximum,
@@ -2044,6 +2046,7 @@ fn parse_schema(value : Json) -> Schema {
         default_value: None,
         examples: [],
         ref_name: None,
+        ref_cycle: false,
         items: None,
         minimum: None,
         maximum: None,
@@ -2063,30 +2066,66 @@ fn parse_schema(value : Json) -> Schema {
 
 ///|
 fn resolve_schema(schema : Schema, schemas : Map[String, Schema]) -> Schema {
-  let resolved = match schema.ref_name {
+  resolve_schema_with_seen(schema, schemas, Map([]))
+}
+
+///|
+fn resolve_schema_with_seen(
+  schema : Schema,
+  schemas : Map[String, Schema],
+  seen : Map[String, Bool],
+) -> Schema {
+  match schema.ref_name {
     Some(reference) => {
       let prefix = "#/components/schemas/"
       if reference.has_prefix(prefix) {
-        match
-          schemas.get(reference[prefix.length():reference.length()].to_owned()) {
-          Some(value) => value
-          None => schema
+        let name = reference[prefix.length():reference.length()].to_owned()
+        if seen.get(name) is Some(_) {
+          return { ..schema, ref_cycle: true }
         }
-      } else {
-        schema
+        match schemas.get(name) {
+          Some(value) => {
+            let next_seen : Map[String, Bool] = Map([])
+            for key, value in seen {
+              next_seen[key] = value
+            }
+            next_seen[name] = true
+            let resolved = resolve_schema_with_seen(value, schemas, next_seen)
+            return { ..resolved, ref_name: schema.ref_name }
+          }
+          None => ()
+        }
       }
     }
-    None => schema
+    None => ()
   }
+  let resolved = schema
   let properties : Map[String, Schema] = Map([])
+  let mut nested_cycle = false
   for name, property in resolved.properties {
-    properties[name] = resolve_schema(property, schemas)
+    let resolved_property = resolve_schema_with_seen(property, schemas, seen)
+    if resolved_property.ref_cycle {
+      nested_cycle = true
+    }
+    properties[name] = resolved_property
   }
   let items = match resolved.items {
-    Some(item) => Some(resolve_schema(item, schemas))
+    Some(item) => {
+      let resolved_item = resolve_schema_with_seen(item, schemas, seen)
+      if resolved_item.ref_cycle {
+        nested_cycle = true
+      }
+      Some(resolved_item)
+    }
     None => None
   }
-  { ..resolved, properties, items, ref_name: schema.ref_name }
+  {
+    ..resolved,
+    properties,
+    items,
+    ref_name: schema.ref_name,
+    ref_cycle: nested_cycle,
+  }
 }
 
 ///|
@@ -2135,6 +2174,15 @@ fn validate_message(
   }
   match message.payload {
     Some(schema) => {
+      if schema.ref_cycle {
+        issues.push(
+          error(
+            "schema.ref.cycle",
+            path + ".payload.$ref",
+            "schema reference cycle could not be resolved",
+          ),
+        )
+      }
       if schema.ref_name is None {
         validate_schema_definition(schema, path + ".payload", issues)
       }
@@ -2571,6 +2619,16 @@ fn validate_json_schema(
         )
       }
     None => ()
+  }
+  if schema.ref_cycle {
+    issues.push(
+      error(
+        "schema.ref.cycle",
+        path + ".$ref",
+        "schema reference cycle could not be resolved",
+      ),
+    )
+    return
   }
   let type_matches = match schema.kind {
     Some(kind) => {

@@ -579,6 +579,16 @@ test "returns clean operation report for valid payload" {
 }
 
 ///|
+test "diagnoses cyclic schema references without recursing forever" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Cycles\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"event\":{\"payload\":{\"$ref\":\"#/components/schemas/Node\"}}}}},\"components\":{\"schemas\":{\"Node\":{\"type\":\"object\",\"properties\":{\"next\":{\"$ref\":\"#/components/schemas/Node\"}}}}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="1")
+  inspect(issues[0].code, content="schema.ref.cycle")
+}
+
+///|
 test "summarizes and filters diagnostics for CI consumers" {
   let document = parse(
     "{\"asyncapi\":\"2.6.0\",\"info\":{\"title\":\"Diagnostics\"},\"channels\":{\"events\":{\"address\":\"events\",\"bindings\":{\"custom\":{}}}}}",

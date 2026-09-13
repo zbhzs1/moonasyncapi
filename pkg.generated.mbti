@@ -151,6 +151,7 @@ pub struct Schema {
   default_value : Json?
   examples : Array[Json]
   ref_name : String?
+  ref_cycle : Bool
   items : Schema?
   minimum : Double?
   maximum : Double?
