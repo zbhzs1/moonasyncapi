@@ -70,6 +70,10 @@ pub struct AsyncApiOperation {
   channel : String
   messages : Array[String]
   protocol : String?
+  summary : String?
+  description : String?
+  tags : Array[String]
+  security_requirements : Array[String]
 } derive(Eq, Debug)
 
 ///|
@@ -148,6 +152,17 @@ pub struct SchemaSummary {
   has_default : Bool
   example_count : Int
   has_constraints : Bool
+} derive(Eq, Debug)
+
+///|
+pub struct DocumentInventory {
+  channel_count : Int
+  message_count : Int
+  operation_count : Int
+  schema_count : Int
+  server_count : Int
+  security_scheme_count : Int
+  parameter_count : Int
 } derive(Eq, Debug)
 
 ///|
@@ -268,6 +283,12 @@ pub fn find_operation(
 }
 
 ///|
+/// Return the declared tags for an operation.
+pub fn operation_tags(operation : AsyncApiOperation) -> Array[String] {
+  operation.tags
+}
+
+///|
 /// Find a server declaration by name.
 pub fn find_server(
   document : AsyncApiDocument,
@@ -324,6 +345,76 @@ pub fn schema_paths(schema : Schema) -> Array[String] {
   let result : Array[String] = []
   collect_schema_paths(schema, "", 0, result)
   result
+}
+
+///|
+/// Return counts for the main contract namespaces.
+pub fn document_inventory(document : AsyncApiDocument) -> DocumentInventory {
+  let mut message_count = document.messages.length()
+  let mut parameter_count = 0
+  for _, channel in document.channels {
+    message_count += channel.messages.length()
+    parameter_count += channel.parameters.length()
+  }
+  {
+    channel_count: document.channels.length(),
+    message_count,
+    operation_count: document.operations.length(),
+    schema_count: document.schemas.length(),
+    server_count: document.servers.length(),
+    security_scheme_count: document.security_schemes.length(),
+    parameter_count,
+  }
+}
+
+///|
+/// Return channel message names in a stable traversal order.
+pub fn channel_message_names(
+  document : AsyncApiDocument,
+  channel_name : String,
+) -> Array[String] {
+  match document.channels.get(channel_name) {
+    Some(channel) => {
+      let names : Array[String] = []
+      for name, _ in channel.messages {
+        names.push(name)
+      }
+      names
+    }
+    None => []
+  }
+}
+
+///|
+/// Return operation names from the parsed document.
+pub fn operation_names(document : AsyncApiDocument) -> Array[String] {
+  let names : Array[String] = []
+  for operation in document.operations {
+    names.push(operation.name)
+  }
+  names
+}
+
+///|
+/// Render operation reports without exposing internal data layout.
+pub fn operation_reports_to_text(
+  reports : Array[OperationValidationReport],
+) -> String {
+  let lines : Array[String] = []
+  for report in reports {
+    lines.push(
+      report.operation_name +
+      " " +
+      report.action +
+      " " +
+      report.channel +
+      " messages=" +
+      report.message_count.to_string() +
+      " status=" +
+      highest_severity(report.diagnostics),
+    )
+  }
+  lines.join("\n")
 }
 
 ///|
@@ -532,6 +623,43 @@ pub fn validate(document : AsyncApiDocument) -> Array[Diagnostic] {
           "action must be send or receive",
         ),
       )
+    }
+    match operation.summary {
+      Some(summary) =>
+        if summary.length() == 0 {
+          issues.push(
+            warning(
+              "operation.summary.empty",
+              path + ".summary",
+              "operation summary must not be empty when supplied",
+            ),
+          )
+        }
+      None => ()
+    }
+    let seen_tags : Map[String, Bool] = Map([])
+    for tag in operation.tags {
+      if seen_tags.get(tag) is Some(_) {
+        issues.push(
+          warning(
+            "operation.tags.duplicate",
+            path + ".tags",
+            "operation tag is listed more than once: " + tag,
+          ),
+        )
+      }
+      seen_tags[tag] = true
+    }
+    for requirement in operation.security_requirements {
+      if document.security_schemes.get(requirement) is None {
+        issues.push(
+          error(
+            "operation.security.reference.missing",
+            path + ".security",
+            "operation references an undeclared security scheme: " + requirement,
+          ),
+        )
+      }
     }
     if document.channels.get(operation.channel) is None {
       issues.push(
@@ -810,6 +938,34 @@ pub fn diff(
               "compat.operation.action.changed",
               "$.operations." + old_operation.name + ".action",
               "operation action changed",
+            ),
+          )
+        }
+        if old_operation.summary != new_operation.summary {
+          issues.push(
+            info(
+              "compat.operation.summary.changed",
+              "$.operations." + old_operation.name + ".summary",
+              "operation summary changed",
+            ),
+          )
+        }
+        if old_operation.description != new_operation.description {
+          issues.push(
+            info(
+              "compat.operation.description.changed",
+              "$.operations." + old_operation.name + ".description",
+              "operation description changed",
+            ),
+          )
+        }
+        if old_operation.security_requirements !=
+          new_operation.security_requirements {
+          issues.push(
+            warning(
+              "compat.operation.security.changed",
+              "$.operations." + old_operation.name + ".security",
+              "operation security requirements changed",
             ),
           )
         }
@@ -1967,7 +2123,21 @@ fn parse_operations(raw : Map[String, Json]) -> Array[AsyncApiOperation] {
           Some(String(value)) => Some(value)
           _ => None
         }
-        result.push({ name, action, channel, messages, protocol })
+        let summary = optional_string_field(object, "summary")
+        let description = optional_string_field(object, "description")
+        let tags = string_array_field(object, "tags")
+        let security_requirements = parse_security_requirements(object)
+        result.push({
+          name,
+          action,
+          channel,
+          messages,
+          protocol,
+          summary,
+          description,
+          tags,
+          security_requirements,
+        })
       }
       _ =>
         result.push({
@@ -1976,6 +2146,10 @@ fn parse_operations(raw : Map[String, Json]) -> Array[AsyncApiOperation] {
           channel: "",
           messages: [],
           protocol: None,
+          summary: None,
+          description: None,
+          tags: [],
+          security_requirements: [],
         })
     }
   }
@@ -3505,6 +3679,25 @@ fn optional_string_field(object : Map[String, Json], name : String) -> String? {
     Some(String(value)) => Some(value)
     _ => None
   }
+}
+
+///|
+fn string_array_field(
+  object : Map[String, Json],
+  name : String,
+) -> Array[String] {
+  let result : Array[String] = []
+  match object.get(name) {
+    Some(Array(values)) =>
+      for value in values {
+        match value {
+          String(text) => result.push(text)
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  result
 }
 
 ///|

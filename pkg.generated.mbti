@@ -8,6 +8,8 @@ import {
 // Values
 pub fn address_parameters(String) -> Array[String]
 
+pub fn channel_message_names(AsyncApiDocument, String) -> Array[String]
+
 pub fn diagnostics_by_severity(Array[Diagnostic], String) -> Array[Diagnostic]
 
 pub fn diagnostics_count(Array[Diagnostic], String) -> Int
@@ -19,6 +21,8 @@ pub fn diagnostics_has_errors(Array[Diagnostic]) -> Bool
 pub fn diagnostics_to_text(Array[Diagnostic]) -> String
 
 pub fn diff(AsyncApiDocument, AsyncApiDocument) -> Array[Diagnostic]
+
+pub fn document_inventory(AsyncApiDocument) -> DocumentInventory
 
 pub fn document_summary(AsyncApiDocument) -> String
 
@@ -40,7 +44,13 @@ pub fn find_server_variable(AsyncApiServer, String) -> ServerVariable?
 
 pub fn highest_severity(Array[Diagnostic]) -> String
 
+pub fn operation_names(AsyncApiDocument) -> Array[String]
+
 pub fn operation_report_diagnostics(Array[OperationValidationReport]) -> Array[Diagnostic]
+
+pub fn operation_reports_to_text(Array[OperationValidationReport]) -> String
+
+pub fn operation_tags(AsyncApiOperation) -> Array[String]
 
 pub fn parse(String) -> Result[AsyncApiDocument, String]
 
@@ -105,6 +115,10 @@ pub struct AsyncApiOperation {
   channel : String
   messages : Array[String]
   protocol : String?
+  summary : String?
+  description : String?
+  tags : Array[String]
+  security_requirements : Array[String]
 } derive(Eq, @debug.Debug)
 
 pub struct AsyncApiServer {
@@ -138,6 +152,16 @@ pub struct DiagnosticSummary {
   warnings : Int
   infos : Int
   total : Int
+} derive(Eq, @debug.Debug)
+
+pub struct DocumentInventory {
+  channel_count : Int
+  message_count : Int
+  operation_count : Int
+  schema_count : Int
+  server_count : Int
+  security_scheme_count : Int
+  parameter_count : Int
 } derive(Eq, @debug.Debug)
 
 pub struct OperationValidationReport {

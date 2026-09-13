@@ -604,6 +604,77 @@ test "supports strict validation and report text" {
 }
 
 ///|
+test "parses operation metadata and security requirements" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Metadata\"},\"components\":{\"securitySchemes\":{\"apiKey\":{\"type\":\"apiKey\",\"in\":\"header\"}}},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"summary\":\"Receive events\",\"description\":\"Consumes created events\",\"tags\":[\"events\",\"public\"],\"security\":[{\"apiKey\":[]}],\"messages\":[\"created\"]}}}",
+  ).unwrap()
+  let operation = find_operation(document, "receive").unwrap()
+  inspect(operation.summary.unwrap(), content="Receive events")
+  inspect(operation_tags(operation).length(), content="2")
+  inspect(operation.security_requirements[0], content="apiKey")
+  inspect(validate(document).length(), content="0")
+}
+
+///|
+test "diagnoses invalid operation metadata and security" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Metadata\"},\"channels\":{\"events\":{\"address\":\"events\"}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"summary\":\"\",\"tags\":[\"events\",\"events\"],\"security\":[{\"missing\":[]}]}}}",
+  ).unwrap()
+  let issues = validate(document)
+  inspect(issues.length(), content="4")
+  inspect(issues[0].code, content="operation.summary.empty")
+  inspect(issues[1].code, content="operation.tags.duplicate")
+  inspect(issues[2].code, content="operation.security.reference.missing")
+  inspect(issues[3].code, content="operation.messages.empty")
+}
+
+///|
+test "reports operation metadata compatibility changes" {
+  let before = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"channels\":{},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"summary\":\"Old\",\"security\":[{\"a\":[]}]}}}",
+  ).unwrap()
+  let after = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"After\"},\"channels\":{},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"summary\":\"New\",\"security\":[]}}}",
+  ).unwrap()
+  let issues = diff(before, after)
+  inspect(issues.length(), content="2")
+  inspect(issues[0].code, content="compat.operation.summary.changed")
+  inspect(issues[1].code, content="compat.operation.security.changed")
+}
+
+///|
+test "provides contract inventory and namespace indexes" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Inventory\"},\"servers\":{\"prod\":{\"host\":\"example.com\",\"protocol\":\"mqtt\"}},\"components\":{\"schemas\":{\"Id\":{\"type\":\"integer\"}},\"securitySchemes\":{\"key\":{\"type\":\"apiKey\",\"in\":\"header\"}},\"messages\":{\"Shared\":{\"payload\":{\"type\":\"string\"}}}},\"channels\":{\"events\":{\"address\":\"events/{id}\",\"parameters\":{\"id\":{}},\"messages\":{\"created\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"messages\":[\"created\"]}}}",
+  ).unwrap()
+  let inventory = document_inventory(document)
+  inspect(inventory.channel_count, content="1")
+  inspect(inventory.message_count, content="2")
+  inspect(inventory.operation_count, content="1")
+  inspect(inventory.schema_count, content="1")
+  inspect(inventory.server_count, content="1")
+  inspect(inventory.security_scheme_count, content="1")
+  inspect(inventory.parameter_count, content="1")
+  inspect(channel_message_names(document, "events").length(), content="1")
+  inspect(operation_names(document)[0], content="receive")
+}
+
+///|
+test "renders operation report text" {
+  let document = parse(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Reports\"},\"channels\":{\"events\":{\"address\":\"events\",\"messages\":{\"created\":{\"payload\":{\"type\":\"string\"}}}}},\"operations\":{\"receive\":{\"action\":\"receive\",\"channel\":\"events\",\"messages\":[\"created\"]}}}",
+  ).unwrap()
+  let reports = validate_operations(
+    document,
+    Map([("receive", @json.parse("\"ok\""))]),
+  )
+  inspect(
+    operation_reports_to_text(reports),
+    content="receive receive events messages=1 status=none",
+  )
+}
+
+///|
 test "reports server security requirement changes" {
   let before = parse(
     "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Before\"},\"servers\":{\"production\":{\"host\":\"example.com\",\"protocol\":\"mqtt\",\"security\":[{\"apiKey\":[]}] }},\"components\":{\"securitySchemes\":{\"apiKey\":{\"type\":\"apiKey\",\"in\":\"header\"}}},\"channels\":{}}",
