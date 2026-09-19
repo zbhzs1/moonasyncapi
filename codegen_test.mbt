@@ -139,3 +139,20 @@ test "suffixes normalized field collisions deterministically" {
   assert_true(source.contains("traceId : String?"))
   assert_true(source.contains("traceId2 : String?"))
 }
+
+///|
+test "emits the Json dependency only when generated source uses Json" {
+  let typed = generate_from_json(codegen_fixture()).unwrap()
+  inspect(
+    find_generated_file(typed, "src/moon.pkg").unwrap().content,
+    content="",
+  )
+  let unconstrained = generate_from_json(
+    "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Raw\"},\"channels\":{\"raw\":{\"address\":\"raw\",\"messages\":{\"event\":{}}}}}",
+  ).unwrap()
+  assert_true(
+    find_generated_file(unconstrained, "src/moon.pkg").unwrap().content.contains(
+      "moonbitlang/core/json",
+    ),
+  )
+}

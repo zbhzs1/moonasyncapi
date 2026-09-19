@@ -826,8 +826,83 @@ fn emit_moon_mod(options : CodegenOptions) -> String {
 }
 
 ///|
-fn emit_moon_pkg() -> String {
-  "import {\n  \"moonbitlang/core/json\",\n}\n"
+fn schema_uses_json(schema : Schema) -> Bool {
+  if schema.ref_name is Some(_) {
+    return false
+  }
+  match schema.kind {
+    Some("object") => {
+      if schema.properties.length() == 0 {
+        return true
+      }
+      for _, property in schema.properties {
+        if schema_uses_json(property) {
+          return true
+        }
+      }
+      false
+    }
+    Some("array") =>
+      match schema.items {
+        Some(item) => schema_uses_json(item)
+        None => true
+      }
+    Some("string")
+    | Some("integer")
+    | Some("number")
+    | Some("boolean")
+    | Some("null") => false
+    _ => true
+  }
+}
+
+///|
+fn document_uses_json(document : AsyncApiDocument) -> Bool {
+  for _, schema in document.schemas {
+    if schema_uses_json(schema) {
+      return true
+    }
+  }
+  for _, message in document.messages {
+    match message.payload {
+      Some(payload) => if schema_uses_json(payload) { return true }
+      None => return true
+    }
+    match message.headers {
+      Some(headers) => if schema_uses_json(headers) { return true }
+      None => ()
+    }
+  }
+  for _, channel in document.channels {
+    for _, message in channel.messages {
+      match message.payload {
+        Some(payload) => if schema_uses_json(payload) { return true }
+        None => return true
+      }
+      match message.headers {
+        Some(headers) => if schema_uses_json(headers) { return true }
+        None => ()
+      }
+    }
+  }
+  for operation in document.operations {
+    if operation.messages.length() == 0 {
+      match document.channels.get(operation.channel) {
+        Some(channel) => if channel.messages.length() == 0 { return true }
+        None => return true
+      }
+    }
+  }
+  false
+}
+
+///|
+fn emit_moon_pkg(needs_json : Bool) -> String {
+  if needs_json {
+    "import {\n  \"moonbitlang/core/json\",\n}\n"
+  } else {
+    ""
+  }
 }
 
 ///|
@@ -853,7 +928,7 @@ pub fn generate_project(
   let source_dir = normalize_source_dir(options.source_dir)
   files.push({
     path: source_dir + "/moon.pkg",
-    content: emit_moon_pkg(),
+    content: emit_moon_pkg(document_uses_json(document)),
     kind: "package",
   })
   if options.split_files {
