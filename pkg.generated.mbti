@@ -12,6 +12,8 @@ pub fn channel_message_names(AsyncApiDocument, String) -> Array[String]
 
 pub fn channel_names(AsyncApiDocument) -> Array[String]
 
+pub fn default_codegen_options() -> CodegenOptions
+
 pub fn diagnostics_by_severity(Array[Diagnostic], String) -> Array[Diagnostic]
 
 pub fn diagnostics_count(Array[Diagnostic], String) -> Int
@@ -36,6 +38,8 @@ pub fn find_channel(AsyncApiDocument, String) -> AsyncApiChannel?
 
 pub fn find_channel_parameter(AsyncApiChannel, String) -> ChannelParameter?
 
+pub fn find_generated_file(GenerationPlan, String) -> GeneratedFile?
+
 pub fn find_message(AsyncApiDocument, String) -> AsyncApiMessage?
 
 pub fn find_operation(AsyncApiDocument, String) -> AsyncApiOperation?
@@ -48,11 +52,23 @@ pub fn find_server(AsyncApiDocument, String) -> AsyncApiServer?
 
 pub fn find_server_variable(AsyncApiServer, String) -> ServerVariable?
 
+pub fn generate_from_json(String, options? : CodegenOptions) -> Result[GenerationPlan, String]
+
+pub fn generate_project(AsyncApiDocument, options? : CodegenOptions) -> GenerationPlan
+
+pub fn generation_has_errors(GenerationPlan) -> Bool
+
+pub fn generation_manifest(GenerationPlan) -> String
+
 pub fn has_operation(AsyncApiDocument, String) -> Bool
 
 pub fn highest_severity(Array[Diagnostic]) -> String
 
 pub fn message_names(AsyncApiDocument) -> Array[String]
+
+pub fn moonbit_type_name(String) -> String
+
+pub fn moonbit_value_name(String) -> String
 
 pub fn operation_count_by_action(AsyncApiDocument, String) -> Int
 
@@ -170,6 +186,21 @@ pub struct ChannelParameter {
   default_value : String?
 } derive(Eq, @debug.Debug)
 
+pub(all) struct CodegenDiagnostic {
+  severity : String
+  code : String
+  path : String
+  message : String
+} derive(Eq, @debug.Debug)
+
+pub(all) struct CodegenOptions {
+  module_name : String
+  source_dir : String
+  split_files : Bool
+  emit_protocol_bindings : Bool
+  emit_operation_stubs : Bool
+} derive(Eq, @debug.Debug)
+
 pub struct Diagnostic {
   severity : String
   code : String
@@ -192,6 +223,27 @@ pub struct DocumentInventory {
   server_count : Int
   security_scheme_count : Int
   parameter_count : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct GeneratedFile {
+  path : String
+  content : String
+  kind : String
+} derive(Eq, @debug.Debug)
+
+pub(all) struct GeneratedType {
+  source_name : String
+  moonbit_name : String
+  declaration : String
+  dependencies : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub(all) struct GenerationPlan {
+  files : Array[GeneratedFile]
+  diagnostics : Array[CodegenDiagnostic]
+  schema_count : Int
+  message_count : Int
+  operation_count : Int
 } derive(Eq, @debug.Debug)
 
 pub struct OperationHeadersValidationReport {

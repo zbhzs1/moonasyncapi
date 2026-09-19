@@ -2,7 +2,6 @@
 /// Options controlling AsyncAPI-to-MoonBit project generation.
 pub(all) struct CodegenOptions {
   module_name : String
-  package_name : String
   source_dir : String
   split_files : Bool
   emit_protocol_bindings : Bool
@@ -49,7 +48,6 @@ pub(all) struct GeneratedType {
 pub fn default_codegen_options() -> CodegenOptions {
   {
     module_name: "generated/asyncapi",
-    package_name: "generated/asyncapi",
     source_dir: "src",
     split_files: true,
     emit_protocol_bindings: true,
