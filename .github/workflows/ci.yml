@@ -26,5 +26,15 @@ jobs:
         run: moon build
       - name: Tests
         run: moon test
-      - name: Runnable example
-        run: moon run cmd/main
+      - name: Build JavaScript generator CLI
+        run: moon check --target js --deny-warn
+      - name: Generate MQTT example project
+        run: moon run cmd/main --target js -- examples/temperature.json _build/e2e-temperature generated/temperature
+      - name: Check generated MQTT project
+        working-directory: _build/e2e-temperature
+        run: moon check --deny-warn
+      - name: Generate Kafka example project
+        run: moon run cmd/main --target js -- examples/order-events.json _build/e2e-orders generated/orders
+      - name: Check generated Kafka project
+        working-directory: _build/e2e-orders
+        run: moon check --deny-warn
