@@ -1,32 +1,40 @@
-# Support Matrix
+# Code Generation Support Matrix
 
-MoonAsyncAPI intentionally implements a documented, testable subset of AsyncAPI
-3.0 JSON. The matrix below is the contract for the current release.
+MoonAsyncAPI generates MoonBit source from a documented AsyncAPI 3.0 JSON
+subset. Unsupported input is either diagnosed or mapped to an explicit fallback;
+the generator does not silently claim complete AsyncAPI or JSON Schema support.
 
-| Area | Supported | Current boundary |
+| Input area | Generated result | Boundary |
 | --- | --- | --- |
-| Document format | AsyncAPI 3.0 JSON | YAML and other AsyncAPI versions are not parsed |
-| Document metadata | `asyncapi`, `info.title` | Additional metadata is currently ignored |
-| Servers | host, protocol, protocol version, pathname, description, variables, endpoint rendering, security requirement references | No authentication, credential loading, TLS, or network connection is performed |
-| Security | descriptive `apiKey`, `http`, `oauth2`, and `openIdConnect` scheme fields, server and operation security requirement names, dangling-reference diagnostics | No authentication, credential loading, TLS, or network connection is performed |
-| Channels | channel names, `address`, address-template parameters, parameter enum/default validation | Local channel references are accepted in operations |
-| Messages | channel messages and local `#/components/messages/...` references, title, content type, payload, headers schema and correlation ID location | External message references are not supported |
-| Operations | `send` and `receive`, channel/message names, summary, description, tags, security requirements, operation lookup and action/protocol indexes | Operation component references are not yet resolved |
-| Schema | `type`, object `properties`, `required`, `additionalProperties: false`, `minProperties`/`maxProperties`, typed `enum`, `const`, validated `default`/`examples`, `minLength`/`maxLength`, formats `email`/`uuid`/`date-time`, arrays, `minItems`/`maxItems`/`uniqueItems`, integer checks, `multipleOf`, inclusive and exclusive numeric ranges | Unsupported composition and advanced keywords produce diagnostics; this is not a complete JSON Schema implementation |
-| Schema references | local `#/components/schemas/...` payload and nested property references, cycle detection | External URLs are not supported; cyclic references produce an error diagnostic |
-| Bindings | binding name recognition for MQTT, Kafka and AMQP | Binding-specific fields are not interpreted |
-| Payloads | type, required properties, property counts, string enum/length, array items/size/uniqueness and numeric range validation | Advanced composition and format validation are not interpreted |
-| Compatibility | channel/message/schema additions and removals, channel address/binding changes, operation additions/removals/action/message/metadata/security changes, server variables/security, schema type/property/required/enum/constraint changes | Schema composition evolution is not interpreted |
+| AsyncAPI format | AsyncAPI 3.0 JSON | YAML and older AsyncAPI versions are not parsed |
+| Object schemas | `pub(all) struct` declarations | Properties, required fields, nested objects, and local references are supported |
+| String enums | MoonBit enum declarations | Enum values are normalized to constructors |
+| Primitive schemas | `String`, `Bool`, `Int`, `Int64`, `Double`, `Unit`, or `Json` | Unknown schema types produce a fallback diagnostic |
+| Arrays | `Array[T]`, including referenced and inline items | Tuple validation and advanced array keywords do not change the generated type |
+| Optional fields | MoonBit option types | Properties absent from `required` receive `?` |
+| Schema references | Local `#/components/schemas/...` references | Missing local and external references are generation errors |
+| Messages | Typed payload, header, and correlation ID envelopes | Messages without schemas use `Json` or string header maps |
+| Operations | Publisher or receive-handler traits | Runtime transport implementations are supplied by the application |
+| Bindings | MQTT, Kafka, AMQP, and custom configuration skeletons | Binding-specific runtime clients and network I/O are not generated |
+| Output layout | Complete `moon.mod`, `moon.pkg`, and source tree | Split-file and single-file layouts are supported |
+| Naming | Identifier normalization, reserved-word escaping, field suffixes | Top-level schema and operation collisions are reported as errors |
+| Ordering | Stable schema dependency and lexical ordering | Cycles produce a stable diagnostic and lexical fallback order |
+| Reproducibility | Identical input and options produce identical files | No timestamps, host paths, or network data enter generated source |
 
-## Tooling Surface
+## Parser Frontend
 
-The library exposes document inventory and namespace indexes for CI and editor-like
-consumers. It can validate payloads and headers for one operation or for a batch of
-operations, then render stable text reports and diagnostic exit summaries. These
-reports are inspection helpers only: they do not execute an operation or connect to
-the protocol named by a binding.
+The retained parser understands channels, operations, messages, servers,
+security declarations, local references, and a JSON Schema subset. Its validation
+diagnostics are useful before code generation. Payload validation, compatibility
+diffs, inventory, and report helpers remain available for existing 0.1.0 users.
 
-The library is offline. It does not establish network connections, read remote
-references, implement a broker or client, or encode transport-specific packets.
-For MQTT byte-level packet encoding and decoding, see the separate
-`zbhzs1/moonbit-mqtt` project.
+These helpers are not the primary differentiator of 0.2.0. MoonAsyncAPI focuses
+on turning event contracts into compilable MoonBit interfaces, while contract
+governance and schema-evolution systems can operate before or alongside it.
+
+## Deliberate Runtime Boundary
+
+Generated code is transport-neutral. It does not open sockets, authenticate,
+perform TLS, publish to a broker, manage offsets, or implement delivery retries.
+Applications can implement the generated traits using their chosen MQTT, Kafka,
+or AMQP runtime. This keeps contract generation deterministic and testable.

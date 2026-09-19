@@ -11,7 +11,7 @@
 
 name = "zbhzs1/moonasyncapi"
 
-version = "0.1.0"
+version = "0.2.0"
 
 readme = "README.mbt.md"
 
@@ -19,8 +19,8 @@ repository = "https://github.com/zbhzs1/moonasyncapi"
 
 license = "Apache-2.0"
 
-keywords = [ "asyncapi", "event-driven", "contract", "validation", "mqtt" ]
+keywords = [ "asyncapi", "codegen", "event-driven", "moonbit", "mqtt" ]
 
 preferred_target = "wasm-gc"
 
-description = "Core AsyncAPI contract model and validator for MoonBit"
+description = "AsyncAPI 3.0 to MoonBit type and message interface generator"
