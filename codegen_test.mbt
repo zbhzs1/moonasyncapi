@@ -99,3 +99,31 @@ test "generation manifest is sorted and stable" {
   assert_true(manifest.contains("manifest\tmoon.mod"))
   assert_true(manifest.contains("operations\tsrc/operations.mbt"))
 }
+
+///|
+test "rejects schema identifier collisions before writing a project" {
+  let input = "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Collision\"},\"components\":{\"schemas\":{\"order-item\":{\"type\":\"string\"},\"order_item\":{\"type\":\"integer\"}}}}"
+  let plan = generate_from_json(input).unwrap()
+  inspect(generation_has_errors(plan), content="true")
+  inspect(plan.diagnostics[0].code, content="codegen.type.collision")
+}
+
+///|
+test "diagnoses unresolved local and external schema references" {
+  let local_input = "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Missing\"},\"components\":{\"schemas\":{\"Event\":{\"$ref\":\"#/components/schemas/Absent\"}}}}"
+  let local_plan = generate_from_json(local_input).unwrap()
+  inspect(local_plan.diagnostics[0].code, content="codegen.ref.unresolved")
+  let external_input = "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"External\"},\"components\":{\"schemas\":{\"Event\":{\"$ref\":\"schemas.json#/Event\"}}}}"
+  let external_plan = generate_from_json(external_input).unwrap()
+  inspect(external_plan.diagnostics[0].code, content="codegen.ref.external")
+}
+
+///|
+test "suffixes normalized field collisions deterministically" {
+  let input = "{\"asyncapi\":\"3.0.0\",\"info\":{\"title\":\"Fields\"},\"components\":{\"schemas\":{\"Event\":{\"type\":\"object\",\"properties\":{\"trace-id\":{\"type\":\"string\"},\"trace.id\":{\"type\":\"string\"}}}}}}"
+  let plan = generate_from_json(input).unwrap()
+  inspect(plan.diagnostics[0].code, content="codegen.field.collision")
+  let source = find_generated_file(plan, "src/types_event.mbt").unwrap().content
+  assert_true(source.contains("traceId : String?"))
+  assert_true(source.contains("traceId2 : String?"))
+}

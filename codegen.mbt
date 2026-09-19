@@ -271,6 +271,161 @@ fn collect_schema_dependencies(
 }
 
 ///|
+fn push_codegen_diagnostic(
+  diagnostics : Array[CodegenDiagnostic],
+  severity : String,
+  code : String,
+  path : String,
+  message : String,
+) -> Unit {
+  diagnostics.push({ severity, code, path, message })
+}
+
+///|
+fn inspect_schema_for_codegen(
+  schema : Schema,
+  path : String,
+  document : AsyncApiDocument,
+  diagnostics : Array[CodegenDiagnostic],
+) -> Unit {
+  match schema.ref_name {
+    Some(reference) =>
+      match local_ref_name(reference) {
+        Some(name) =>
+          if document.schemas.get(name) is None {
+            push_codegen_diagnostic(
+              diagnostics,
+              "error",
+              "codegen.ref.unresolved",
+              path,
+              "local schema reference `" + name + "` does not exist",
+            )
+          }
+        None =>
+          push_codegen_diagnostic(
+            diagnostics,
+            "error",
+            "codegen.ref.external",
+            path,
+            "external schema references are not supported by project generation",
+          )
+      }
+    None => ()
+  }
+  let normalized_fields : Map[String, String] = Map([])
+  let property_names = sorted_map_keys(schema.properties)
+  for property_name in property_names {
+    let normalized = moonbit_value_name(property_name)
+    match normalized_fields.get(normalized) {
+      Some(previous) =>
+        push_codegen_diagnostic(
+          diagnostics,
+          "warning",
+          "codegen.field.collision",
+          path + ".properties." + property_name,
+          "field name collides with `" + previous + "`; a numeric suffix is emitted",
+        )
+      None => normalized_fields[normalized] = property_name
+    }
+    inspect_schema_for_codegen(
+      schema.properties.get(property_name).unwrap(),
+      path + ".properties." + property_name,
+      document,
+      diagnostics,
+    )
+  }
+  match schema.items {
+    Some(item) =>
+      inspect_schema_for_codegen(item, path + ".items", document, diagnostics)
+    None => ()
+  }
+  match schema.kind {
+    Some("object") | Some("array") | Some("string") | Some("integer") |
+    Some("number") | Some("boolean") | Some("null") | None => ()
+    Some(kind) =>
+      push_codegen_diagnostic(
+        diagnostics,
+        "warning",
+        "codegen.schema.fallback",
+        path + ".type",
+        "schema type `" + kind + "` is emitted as Json",
+      )
+  }
+}
+
+///|
+fn inspect_codegen_input(
+  document : AsyncApiDocument,
+  diagnostics : Array[CodegenDiagnostic],
+) -> Unit {
+  let normalized_types : Map[String, String] = Map([])
+  let schema_names = sorted_map_keys(document.schemas)
+  for schema_name in schema_names {
+    let normalized = moonbit_type_name(schema_name)
+    match normalized_types.get(normalized) {
+      Some(previous) =>
+        push_codegen_diagnostic(
+          diagnostics,
+          "error",
+          "codegen.type.collision",
+          "$.components.schemas." + schema_name,
+          "schema name collides with `" + previous + "` after normalization",
+        )
+      None => normalized_types[normalized] = schema_name
+    }
+    inspect_schema_for_codegen(
+      document.schemas.get(schema_name).unwrap(),
+      "$.components.schemas." + schema_name,
+      document,
+      diagnostics,
+    )
+  }
+  let operation_names : Map[String, String] = Map([])
+  for operation in document.operations {
+    let normalized = moonbit_type_name(operation.name)
+    match operation_names.get(normalized) {
+      Some(previous) =>
+        push_codegen_diagnostic(
+          diagnostics,
+          "error",
+          "codegen.operation.collision",
+          "$.operations." + operation.name,
+          "operation name collides with `" + previous + "` after normalization",
+        )
+      None => operation_names[normalized] = operation.name
+    }
+  }
+  let channel_names = sorted_map_keys(document.channels)
+  for channel_name in channel_names {
+    let channel = document.channels.get(channel_name).unwrap()
+    let message_names = sorted_map_keys(channel.messages)
+    for message_name in message_names {
+      let message = channel.messages.get(message_name).unwrap()
+      match message.payload {
+        Some(payload) =>
+          inspect_schema_for_codegen(
+            payload,
+            "$.channels." + channel_name + ".messages." + message_name + ".payload",
+            document,
+            diagnostics,
+          )
+        None => ()
+      }
+      match message.headers {
+        Some(headers) =>
+          inspect_schema_for_codegen(
+            headers,
+            "$.channels." + channel_name + ".messages." + message_name + ".headers",
+            document,
+            diagnostics,
+          )
+        None => ()
+      }
+    }
+  }
+}
+
+///|
 fn escape_doc_text(source : String) -> String {
   source.replace(old="\n", new=" ").replace(old="\r", new=" ")
 }
@@ -607,6 +762,7 @@ pub fn generate_project(
   options~ : CodegenOptions = default_codegen_options(),
 ) -> GenerationPlan {
   let diagnostics : Array[CodegenDiagnostic] = []
+  inspect_codegen_input(document, diagnostics)
   if options.module_name.trim().length() == 0 {
     diagnostics.push({
       severity: "error",
