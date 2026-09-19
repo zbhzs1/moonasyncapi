@@ -848,7 +848,7 @@ pub fn generate_project(
   }
   let types = order_generated_types(document, diagnostics)
   let files : Array[GeneratedFile] = [
-    { path: "moon.mod", content: emit_moon_mod(options), kind: "manifest" },
+    { path: "moon.mod", content: emit_moon_mod(options), kind: "manifest", },
   ]
   let source_dir = normalize_source_dir(options.source_dir)
   files.push({
