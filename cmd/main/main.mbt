@@ -47,7 +47,7 @@ fn main {
     "generated/asyncapi"
   }
   let input = cli_read_text(input_path)
-  let options = { ..@lib.default_codegen_options(), module_name }
+  let options = { ..@lib.default_codegen_options(), module_name, }
   match @lib.generate_from_json(input, options~) {
     Err(error) => cli_fail("MoonAsyncAPI: " + error)
     Ok(plan) => {
@@ -59,7 +59,9 @@ fn main {
         cli_write_text(output_dir + "/" + file.path, file.content)
       }
       println(
-        "Generated " + plan.files.length().to_string() + " files in " +
+        "Generated " +
+        plan.files.length().to_string() +
+        " files in " +
         output_dir,
       )
     }

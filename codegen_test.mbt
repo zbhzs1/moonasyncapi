@@ -21,10 +21,22 @@ test "generates a deterministic multi-file MoonBit project" {
   inspect(plan.diagnostics.length(), content="0")
   inspect(plan.files.length(), content="8")
   inspect(find_generated_file(plan, "moon.mod") is Some(_), content="true")
-  inspect(find_generated_file(plan, "src/types_order.mbt") is Some(_), content="true")
-  inspect(find_generated_file(plan, "src/messages.mbt") is Some(_), content="true")
-  inspect(find_generated_file(plan, "src/operations.mbt") is Some(_), content="true")
-  inspect(find_generated_file(plan, "src/bindings.mbt") is Some(_), content="true")
+  inspect(
+    find_generated_file(plan, "src/types_order.mbt") is Some(_),
+    content="true",
+  )
+  inspect(
+    find_generated_file(plan, "src/messages.mbt") is Some(_),
+    content="true",
+  )
+  inspect(
+    find_generated_file(plan, "src/operations.mbt") is Some(_),
+    content="true",
+  )
+  inspect(
+    find_generated_file(plan, "src/bindings.mbt") is Some(_),
+    content="true",
+  )
 }
 
 ///|
@@ -36,10 +48,7 @@ test "maps object fields, optional values, arrays and refs" {
   assert_true(order.contains("status : OrderStatus"))
   assert_true(order.contains("classValue : String?"))
   assert_true(order.contains("tags : Array[String]?"))
-  let status = find_generated_file(
-    plan,
-    "src/types_orderstatus.mbt",
-  ).unwrap().content
+  let status = find_generated_file(plan, "src/types_orderstatus.mbt").unwrap().content
   assert_true(status.contains("pub enum OrderStatus"))
   assert_true(status.contains("InProgress"))
 }
@@ -60,7 +69,7 @@ test "emits typed messages, operation ports and protocol bindings" {
 
 ///|
 test "supports deterministic single-file generation" {
-  let options = { ..default_codegen_options(), split_files: false }
+  let options = { ..default_codegen_options(), split_files: false, }
   let first = generate_from_json(codegen_fixture(), options~).unwrap()
   let second = generate_from_json(codegen_fixture(), options~).unwrap()
   assert_true(first == second)
@@ -78,13 +87,16 @@ test "can disable transport and operation scaffolding" {
     emit_operation_stubs: false,
   }
   let plan = generate_from_json(codegen_fixture(), options~).unwrap()
-  inspect(find_generated_file(plan, "src/operations.mbt") is None, content="true")
+  inspect(
+    find_generated_file(plan, "src/operations.mbt") is None,
+    content="true",
+  )
   inspect(find_generated_file(plan, "src/bindings.mbt") is None, content="true")
 }
 
 ///|
 test "reports invalid generator options without hiding generated files" {
-  let options = { ..default_codegen_options(), module_name: "" }
+  let options = { ..default_codegen_options(), module_name: "", }
   let plan = generate_from_json(codegen_fixture(), options~).unwrap()
   inspect(generation_has_errors(plan), content="true")
   inspect(plan.diagnostics[0].code, content="codegen.module.empty")

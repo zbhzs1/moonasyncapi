@@ -126,9 +126,9 @@ pub fn moonbit_type_name(source : String) -> String {
 fn cg_reserved(name : String) -> Bool {
   let words = [
     "as", "break", "catch", "class", "const", "continue", "derive", "else", "enum",
-    "fn", "for", "guard", "if", "impl", "in", "let", "loop", "match",
-    "mut", "priv", "pub", "raise", "return", "struct", "test", "trait",
-    "try", "type", "while", "with", "async", "await",
+    "fn", "for", "guard", "if", "impl", "in", "let", "loop", "match", "mut", "priv",
+    "pub", "raise", "return", "struct", "test", "trait", "try", "type", "while",
+    "with", "async", "await",
   ]
   for word in words {
     if name == word {
@@ -213,19 +213,19 @@ fn inline_schema_type(schema : Schema, fallback : String) -> String {
         fallback
       } else {
         match schema.kind {
-        Some("array") => {
-          let item_type = match schema.items {
-            Some(item) => inline_schema_type(item, fallback + "Item")
-            None => "Json"
+          Some("array") => {
+            let item_type = match schema.items {
+              Some(item) => inline_schema_type(item, fallback + "Item")
+              None => "Json"
+            }
+            "Array[" + item_type + "]"
           }
-          "Array[" + item_type + "]"
-        }
-        Some("object") =>
-          if schema.properties.length() == 0 {
-            "Map[String, Json]"
-          } else {
-            fallback
-          }
+          Some("object") =>
+            if schema.properties.length() == 0 {
+              "Map[String, Json]"
+            } else {
+              fallback
+            }
           _ => primitive_type(schema.kind, schema.format_name)
         }
       }
@@ -276,7 +276,7 @@ fn push_codegen_diagnostic(
   path : String,
   message : String,
 ) -> Unit {
-  diagnostics.push({ severity, code, path, message })
+  diagnostics.push({ severity, code, path, message, })
 }
 
 ///|
@@ -301,11 +301,7 @@ fn inspect_schema_for_codegen(
           }
         None =>
           push_codegen_diagnostic(
-            diagnostics,
-            "error",
-            "codegen.ref.external",
-            path,
-            "external schema references are not supported by project generation",
+            diagnostics, "error", "codegen.ref.external", path, "external schema references are not supported by project generation",
           )
       }
     None => ()
@@ -321,7 +317,9 @@ fn inspect_schema_for_codegen(
           "warning",
           "codegen.field.collision",
           path + ".properties." + property_name,
-          "field name collides with `" + previous + "`; a numeric suffix is emitted",
+          "field name collides with `" +
+          previous +
+          "`; a numeric suffix is emitted",
         )
       None => normalized_fields[normalized] = property_name
     }
@@ -338,8 +336,14 @@ fn inspect_schema_for_codegen(
     None => ()
   }
   match schema.kind {
-    Some("object") | Some("array") | Some("string") | Some("integer") |
-    Some("number") | Some("boolean") | Some("null") | None => ()
+    Some("object")
+    | Some("array")
+    | Some("string")
+    | Some("integer")
+    | Some("number")
+    | Some("boolean")
+    | Some("null")
+    | None => ()
     Some(kind) =>
       push_codegen_diagnostic(
         diagnostics,
@@ -403,7 +407,11 @@ fn inspect_codegen_input(
         Some(payload) =>
           inspect_schema_for_codegen(
             payload,
-            "$.channels." + channel_name + ".messages." + message_name + ".payload",
+            "$.channels." +
+            channel_name +
+            ".messages." +
+            message_name +
+            ".payload",
             document,
             diagnostics,
           )
@@ -413,7 +421,11 @@ fn inspect_codegen_input(
         Some(headers) =>
           inspect_schema_for_codegen(
             headers,
-            "$.channels." + channel_name + ".messages." + message_name + ".headers",
+            "$.channels." +
+            channel_name +
+            ".messages." +
+            message_name +
+            ".headers",
             document,
             diagnostics,
           )
@@ -432,7 +444,8 @@ fn escape_doc_text(source : String) -> String {
 fn emit_enum(schema_name : String, schema : Schema) -> String {
   let type_name = moonbit_type_name(schema_name)
   let mut output = "///|\n/// Generated from AsyncAPI schema `" +
-    escape_doc_text(schema_name) + "`.\n"
+    escape_doc_text(schema_name) +
+    "`.\n"
   output = output + "pub enum " + type_name + " {\n"
   let used : Map[String, Int] = Map([])
   for raw_value in schema.enum_values {
@@ -449,7 +462,8 @@ fn emit_enum(schema_name : String, schema : Schema) -> String {
 fn emit_struct(schema_name : String, schema : Schema) -> String {
   let type_name = moonbit_type_name(schema_name)
   let mut output = "///|\n/// Generated from AsyncAPI schema `" +
-    escape_doc_text(schema_name) + "`.\n"
+    escape_doc_text(schema_name) +
+    "`.\n"
   output = output + "pub(all) struct " + type_name + " {\n"
   let property_names = sorted_map_keys(schema.properties)
   let used : Map[String, Int] = Map([])
@@ -458,7 +472,11 @@ fn emit_struct(schema_name : String, schema : Schema) -> String {
     let base = moonbit_value_name(property_name)
     let count = used.get(base).unwrap_or(0)
     used[base] = count + 1
-    let field_name = if count == 0 { base } else { base + (count + 1).to_string() }
+    let field_name = if count == 0 {
+      base
+    } else {
+      base + (count + 1).to_string()
+    }
     let nested_name = type_name + moonbit_type_name(property_name)
     let base_type = inline_schema_type(property, nested_name)
     let field_type = if schema_is_required(schema, property_name) {
@@ -472,7 +490,10 @@ fn emit_struct(schema_name : String, schema : Schema) -> String {
 }
 
 ///|
-fn emit_inline_schema_declarations(type_name : String, schema : Schema) -> String {
+fn emit_inline_schema_declarations(
+  type_name : String,
+  schema : Schema,
+) -> String {
   if schema.ref_name is Some(_) {
     return ""
   }
@@ -480,7 +501,8 @@ fn emit_inline_schema_declarations(type_name : String, schema : Schema) -> Strin
   if schema.kind == Some("array") {
     match schema.items {
       Some(item) =>
-        output = output + emit_inline_schema_declarations(type_name + "Item", item)
+        output = output +
+          emit_inline_schema_declarations(type_name + "Item", item)
       None => ()
     }
     return output
@@ -494,10 +516,11 @@ fn emit_inline_schema_declarations(type_name : String, schema : Schema) -> Strin
   let names = sorted_map_keys(schema.properties)
   for name in names {
     let property = schema.properties.get(name).unwrap()
-    output = output + emit_inline_schema_declarations(
-      type_name + moonbit_type_name(name),
-      property,
-    )
+    output = output +
+      emit_inline_schema_declarations(
+        type_name + moonbit_type_name(name),
+        property,
+      )
   }
   output + emit_struct(type_name, schema) + "\n"
 }
@@ -506,8 +529,13 @@ fn emit_inline_schema_declarations(type_name : String, schema : Schema) -> Strin
 fn emit_alias(schema_name : String, schema : Schema) -> String {
   let type_name = moonbit_type_name(schema_name)
   let target = inline_schema_type(schema, type_name + "Value")
-  "///|\n/// Generated from AsyncAPI schema `" + escape_doc_text(schema_name) +
-  "`.\npub type " + type_name + " = " + target + "\n"
+  "///|\n/// Generated from AsyncAPI schema `" +
+  escape_doc_text(schema_name) +
+  "`.\npub type " +
+  type_name +
+  " = " +
+  target +
+  "\n"
 }
 
 ///|
@@ -516,10 +544,11 @@ fn emit_generated_type(schema_name : String, schema : Schema) -> GeneratedType {
     let mut output = ""
     let names = sorted_map_keys(schema.properties)
     for name in names {
-      output = output + emit_inline_schema_declarations(
-        moonbit_type_name(schema_name) + moonbit_type_name(name),
-        schema.properties.get(name).unwrap(),
-      )
+      output = output +
+        emit_inline_schema_declarations(
+          moonbit_type_name(schema_name) + moonbit_type_name(name),
+          schema.properties.get(name).unwrap(),
+        )
     }
     output
   } else {
@@ -560,7 +589,8 @@ fn order_generated_types(
       let dependencies = schema_dependencies(schema)
       let mut ready = true
       for dependency in dependencies {
-        if dependency != name && document.schemas.get(dependency) is Some(_) &&
+        if dependency != name &&
+          document.schemas.get(dependency) is Some(_) &&
           emitted.get(dependency) is None {
           ready = false
         }
@@ -581,7 +611,9 @@ fn order_generated_types(
           path: "$.components.schemas." + name,
           message: "schema dependency cycle emitted in stable lexical order",
         })
-        result.push(emit_generated_type(name, document.schemas.get(name).unwrap()))
+        result.push(
+          emit_generated_type(name, document.schemas.get(name).unwrap()),
+        )
       }
     }
   }
@@ -621,7 +653,8 @@ fn emit_messages(document : AsyncApiDocument) -> String {
     for name in names {
       let qualified = moonbit_type_name(channel_name) + moonbit_type_name(name)
       if emitted.get(qualified) is None {
-        output = output + emit_message(qualified, channel.messages.get(name).unwrap())
+        output = output +
+          emit_message(qualified, channel.messages.get(name).unwrap())
         emitted[qualified] = true
       }
     }
@@ -635,18 +668,28 @@ fn emit_message(name : String, message : AsyncApiMessage) -> String {
   let payload_type = message_payload_type(message, type_name + "Payload")
   let headers_type = message_headers_type(message, type_name + "Headers")
   let payload_declarations = match message.payload {
-    Some(payload) => emit_inline_schema_declarations(type_name + "Payload", payload)
+    Some(payload) =>
+      emit_inline_schema_declarations(type_name + "Payload", payload)
     None => ""
   }
   let header_declarations = match message.headers {
-    Some(headers) => emit_inline_schema_declarations(type_name + "Headers", headers)
+    Some(headers) =>
+      emit_inline_schema_declarations(type_name + "Headers", headers)
     None => ""
   }
-  payload_declarations + header_declarations +
-  "///|\n/// Typed envelope for AsyncAPI message `" + escape_doc_text(name) +
-  "`.\npub(all) struct " + type_name + " {\n" +
-  "  payload : " + payload_type + "\n" +
-  "  headers : " + headers_type + "\n" +
+  payload_declarations +
+  header_declarations +
+  "///|\n/// Typed envelope for AsyncAPI message `" +
+  escape_doc_text(name) +
+  "`.\npub(all) struct " +
+  type_name +
+  " {\n" +
+  "  payload : " +
+  payload_type +
+  "\n" +
+  "  headers : " +
+  headers_type +
+  "\n" +
   "  correlationId : String?\n" +
   "} derive(Eq, Debug)\n\n"
 }
@@ -658,13 +701,17 @@ fn operation_message_type(
 ) -> String {
   if operation.messages.length() > 0 {
     let message_name = operation.messages[0]
-    moonbit_type_name(operation.channel) + moonbit_type_name(message_name) + "Message"
+    moonbit_type_name(operation.channel) +
+    moonbit_type_name(message_name) +
+    "Message"
   } else {
     match document.channels.get(operation.channel) {
       Some(channel) => {
         let names = sorted_map_keys(channel.messages)
         if names.length() > 0 {
-          moonbit_type_name(operation.channel) + moonbit_type_name(names[0]) + "Message"
+          moonbit_type_name(operation.channel) +
+          moonbit_type_name(names[0]) +
+          "Message"
         } else {
           "Json"
         }
@@ -686,15 +733,29 @@ fn emit_operations(document : AsyncApiDocument) -> String {
       Some(channel) => channel.address
       None => operation.channel
     }
-    output = output + "///|\n/// " + operation.action + " on `" +
-      escape_doc_text(channel_address) + "`.\n"
+    output = output +
+      "///|\n/// " +
+      operation.action +
+      " on `" +
+      escape_doc_text(channel_address) +
+      "`.\n"
     if operation.action == "receive" {
-      output = output + "pub trait " + moonbit_type_name(operation.name) +
-        "Handler {\n  " + function_name + "(Self, " + message_type +
+      output = output +
+        "pub trait " +
+        moonbit_type_name(operation.name) +
+        "Handler {\n  " +
+        function_name +
+        "(Self, " +
+        message_type +
         ") -> Unit\n}\n\n"
     } else {
-      output = output + "pub trait " + moonbit_type_name(operation.name) +
-        "Publisher {\n  " + function_name + "(Self, " + message_type +
+      output = output +
+        "pub trait " +
+        moonbit_type_name(operation.name) +
+        "Publisher {\n  " +
+        function_name +
+        "(Self, " +
+        message_type +
         ") -> Unit\n}\n\n"
     }
   }
@@ -714,36 +775,52 @@ fn protocol_config_type(protocol : String) -> String {
 ///|
 fn emit_bindings(document : AsyncApiDocument) -> String {
   let mut output = "/// Transport configuration skeletons; no network I/O is generated.\n\n"
-  output = output + "pub(all) struct MqttBindingConfig {\n  topic : String\n  qos : Int\n  retain : Bool\n} derive(Eq, Debug)\n\n"
-  output = output + "pub(all) struct KafkaBindingConfig {\n  topic : String\n  groupId : String?\n} derive(Eq, Debug)\n\n"
-  output = output + "pub(all) struct AmqpBindingConfig {\n  exchange : String\n  routingKey : String\n} derive(Eq, Debug)\n\n"
-  output = output + "pub(all) struct CustomBindingConfig {\n  protocol : String\n  address : String\n} derive(Eq, Debug)\n\n"
+  output = output +
+    "pub(all) struct MqttBindingConfig {\n  topic : String\n  qos : Int\n  retain : Bool\n} derive(Eq, Debug)\n\n"
+  output = output +
+    "pub(all) struct KafkaBindingConfig {\n  topic : String\n  groupId : String?\n} derive(Eq, Debug)\n\n"
+  output = output +
+    "pub(all) struct AmqpBindingConfig {\n  exchange : String\n  routingKey : String\n} derive(Eq, Debug)\n\n"
+  output = output +
+    "pub(all) struct CustomBindingConfig {\n  protocol : String\n  address : String\n} derive(Eq, Debug)\n\n"
   let names = sorted_map_keys(document.channels)
   for name in names {
     let channel = document.channels.get(name).unwrap()
     let protocol = channel.binding.unwrap_or("custom")
-    output = output + "/// `" + escape_doc_text(channel.address) + "` uses " +
-      protocol + ".\npub type " + moonbit_type_name(name) + "Binding = " +
-      protocol_config_type(protocol) + "\n\n"
+    output = output +
+      "/// `" +
+      escape_doc_text(channel.address) +
+      "` uses " +
+      protocol +
+      ".\npub type " +
+      moonbit_type_name(name) +
+      "Binding = " +
+      protocol_config_type(protocol) +
+      "\n\n"
   }
   output
 }
 
 ///|
 fn source_header(document : AsyncApiDocument) -> String {
-  "// Generated by MoonAsyncAPI from " + document.title +
-  ". DO NOT EDIT.\n\n"
+  "// Generated by MoonAsyncAPI from " + document.title + ". DO NOT EDIT.\n\n"
 }
 
 ///|
 fn normalize_source_dir(source_dir : String) -> String {
   let trimmed = source_dir.trim().to_owned().replace(old="\\", new="/")
-  if trimmed.length() == 0 { "src" } else { trimmed }
+  if trimmed.length() == 0 {
+    "src"
+  } else {
+    trimmed
+  }
 }
 
 ///|
 fn emit_moon_mod(options : CodegenOptions) -> String {
-  "name = \"" + options.module_name + "\"\n\n" +
+  "name = \"" +
+  options.module_name +
+  "\"\n\n" +
   "version = \"0.1.0\"\n\n" +
   "license = \"Apache-2.0\"\n"
 }
@@ -757,7 +834,7 @@ fn emit_moon_pkg() -> String {
 /// Generate a complete MoonBit project plan from a parsed AsyncAPI document.
 pub fn generate_project(
   document : AsyncApiDocument,
-  options~ : CodegenOptions = default_codegen_options(),
+  options? : CodegenOptions = default_codegen_options(),
 ) -> GenerationPlan {
   let diagnostics : Array[CodegenDiagnostic] = []
   inspect_codegen_input(document, diagnostics)
@@ -782,7 +859,10 @@ pub fn generate_project(
   if options.split_files {
     for generated_type in types {
       files.push({
-        path: source_dir + "/types_" + generated_type.source_name.to_lower().replace(old="-", new="_") + ".mbt",
+        path: source_dir +
+        "/types_" +
+        generated_type.source_name.to_lower().replace(old="-", new="_") +
+        ".mbt",
         content: source_header(document) + generated_type.declaration,
         kind: "schema",
       })
@@ -818,7 +898,7 @@ pub fn generate_project(
     if options.emit_protocol_bindings {
       content = content + emit_bindings(document)
     }
-    files.push({ path: source_dir + "/generated.mbt", content, kind: "source" })
+    files.push({ path: source_dir + "/generated.mbt", content, kind: "source", })
   }
   {
     files,
@@ -833,7 +913,7 @@ pub fn generate_project(
 /// Parse JSON and generate a project in one call.
 pub fn generate_from_json(
   input : String,
-  options~ : CodegenOptions = default_codegen_options(),
+  options? : CodegenOptions = default_codegen_options(),
 ) -> Result[GenerationPlan, String] {
   match parse(input) {
     Ok(document) => Ok(generate_project(document, options~))
@@ -842,7 +922,10 @@ pub fn generate_from_json(
 }
 
 ///|
-pub fn find_generated_file(plan : GenerationPlan, path : String) -> GeneratedFile? {
+pub fn find_generated_file(
+  plan : GenerationPlan,
+  path : String,
+) -> GeneratedFile? {
   for file in plan.files {
     if file.path == path {
       return Some(file)
@@ -867,8 +950,13 @@ pub fn generation_manifest(plan : GenerationPlan) -> String {
   files.sort_by(fn(left, right) { left.path.compare(right.path) })
   let mut output = ""
   for file in files {
-    output = output + file.kind + "\t" + file.path + "\t" +
-      file.content.length().to_string() + "\n"
+    output = output +
+      file.kind +
+      "\t" +
+      file.path +
+      "\t" +
+      file.content.length().to_string() +
+      "\n"
   }
   output
 }

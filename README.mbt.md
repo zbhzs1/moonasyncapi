@@ -35,8 +35,9 @@ moon add zbhzs1/moonasyncapi
 Add the library import to `moon.pkg`:
 
 ```moonbit nocheck
+///|
 import {
-  "zbhzs1/moonasyncapi"
+  "zbhzs1/moonasyncapi",
 }
 ```
 
