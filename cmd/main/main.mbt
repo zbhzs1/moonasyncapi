@@ -1,6 +1,6 @@
 ///|
 #cfg(target="js")
-extern "js" fn cli_arguments() -> Array[String] =
+extern "js" fn cli_arguments() -> FixedArray[String] =
   #|() => process.argv.slice(2)
 
 ///|
