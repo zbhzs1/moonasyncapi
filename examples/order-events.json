@@ -1,0 +1,79 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Order Events",
+    "version": "1.0.0"
+  },
+  "channels": {
+    "order-events": {
+      "address": "orders/{tenant}",
+      "parameters": {
+        "tenant": {
+          "description": "Tenant identifier"
+        }
+      },
+      "bindings": {
+        "kafka": {}
+      },
+      "messages": {
+        "order-created": {
+          "contentType": "application/json",
+          "payload": {
+            "$ref": "#/components/schemas/Order"
+          },
+          "headers": {
+            "$ref": "#/components/schemas/TraceHeaders"
+          }
+        }
+      }
+    }
+  },
+  "operations": {
+    "consume-orders": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/order-events"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/order-events/messages/order-created"
+        }
+      ]
+    }
+  },
+  "components": {
+    "schemas": {
+      "OrderStatus": {
+        "type": "string",
+        "enum": ["created", "in-progress", "done"]
+      },
+      "TraceHeaders": {
+        "type": "object",
+        "required": ["trace-id"],
+        "properties": {
+          "trace-id": {
+            "type": "string"
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
